@@ -8,9 +8,42 @@ from app.agents.job_advisor import JobAdvisorAgent
 from app.services.vector_store import VectorStoreService
 import signal
 import sys
+import json
+import logging
+from contextlib import asynccontextmanager
+from app.core.prompts import EXTRACT_INFO_PROMPT
 
-# FastAPI 앱 생성
-app = FastAPI()
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    try:
+        logger.info("벡터 스토어를 초기화합니다.")
+        vector_store = VectorStoreService()
+        vector_store.setup_vector_store()
+        logger.info("벡터 스토어 초기화 완료")
+        
+        logger.info("LLM과 에이전트를 초기화합니다.")
+        llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.7
+        )
+        
+        app.state.job_advisor_agent = JobAdvisorAgent(llm=llm, vector_store=vector_store)
+        logger.info("초기화 완료")
+        
+    except Exception as e:
+        logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
+        raise
+        
+    yield
+    
+    # shutdown
+    logger.info("서버를 종료합니다...")
+
+# FastAPI 앱 생성 시 lifespan 설정
+app = FastAPI(lifespan=lifespan)
 
 # CORS 설정
 app.add_middleware(
@@ -27,53 +60,42 @@ job_advisor_agent = None
 llm = None
 
 def signal_handler(sig, frame):
-    print("\n서버를 안전하게 종료합니다...")
+    """
+    시그널 핸들러 - SIGINT(Ctrl+C)나 SIGTERM 시그널을 받으면 실행됨
+    sig: 발생한 시그널 번호
+    frame: 현재 스택 프레임
+    """
+    logger.info(f"\n시그널 {sig} 감지. 서버를 안전하게 종료합니다...")
     sys.exit(0)
-
-@app.on_event("startup")
-async def startup_event():
-    global vector_store, job_advisor_agent, llm
-    
-    try:
-        print("벡터 스토어를 초기화합니다.")
-        vector_store_service = VectorStoreService()
-        vector_store = vector_store_service.setup_vector_store()
-        print(f"벡터 스토어 초기화 완료")
-        
-        print("LLM과 에이전트를 초기화합니다.")
-        llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.7  # 일상 대화를 위해 temperature 값 조정
-        )
-        
-        job_advisor_agent = JobAdvisorAgent(llm=llm, vector_store=vector_store)
-        print("초기화 완료")
-        
-    except Exception as e:
-        print(f"시작 중 오류 발생: {str(e)}")
-        sys.exit(1)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("서버를 종료합니다...")
-    # 필요한 정리 작업 수행
 
 # 라우터 등록
 app.include_router(chat_router.router, prefix="/api/v1")
 
+@app.post("/api/v1/extract_info/")
+async def extract_user_info(request: dict):
+    try:
+        user_message = request.get("user_message", "")
+        response = llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
+        info = json.loads(response)
+        return info
+    except Exception as e:
+        logger.error(f"Info extraction error: {e}")
+        return {}
+
 if __name__ == "__main__":
-    # Ctrl+C 시그널 핸들러 등록
+    # Ctrl+C와 SIGTERM 시그널 핸들러 등록
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
     try:
+        # 개발 서버 실행
         uvicorn.run(
             "app.main:app",
             host="127.0.0.1",
             port=8000,
-            reload=True,
+            reload=True,  # 코드 변경 시 자동 재시작
             reload_delay=1
         )
     except Exception as e:
-        print(f"서버 실행 중 오류 발생: {str(e)}")
-        sys.exit(1) 
+        logger.error(f"서버 실행 중 오류 발생: {str(e)}")
+        sys.exit(1)
