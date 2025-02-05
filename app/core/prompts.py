@@ -16,13 +16,13 @@ verify_prompt = PromptTemplate.from_template("""
 답변:
 """)
 
-rewrite_prompt = PromptTemplate.from_template(f"""
+rewrite_prompt = PromptTemplate.from_template("""
 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
 
-사전: {DICTIONARY}
+사전: {dictionary}
 
-질문: {{query}}
+질문: {query}
 
 변경된 질문을 출력해주세요:
 """)
@@ -68,8 +68,21 @@ chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상�
 3. 시니어 친화적인 언어 사용
 4. 명확하고 이해하기 쉬운 설명 제공"""
 
-# 기본 대화 프롬프트 템플릿
+# 기본 대화 프롬프트 템플릿 (CHAT_PROMPT 제거하고 이것만 사용)
 chat_prompt = ChatPromptTemplate.from_messages([
     ("system", chat_persona_prompt),
-    ("human", "{input}")
-]) 
+    ("human", "{query}")  # input -> query로 변경하여 일관성 유지
+])
+
+# 정보 추출 프롬프트 추가
+EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
+사용자 메시지에서 나이, 희망 근무지역, 희망 직무를 추출해주세요.
+메시지: {query}
+
+다음 형식의 JSON으로 응답해주세요:
+{
+    "age": "추출된 나이 (없으면 빈 문자열)",
+    "location": "추출된 희망 근무지역 (없으면 빈 문자열)",
+    "jobType": "추출된 희망 직무 (없으면 빈 문자열)"
+}
+""") 
