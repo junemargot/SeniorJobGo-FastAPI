@@ -12,6 +12,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
+from db import database_initialize, database_shutdown
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ def signal_handler(sig, frame):
 
 # 라우터 등록
 app.include_router(chat_router.router, prefix="/api/v1")
+database_initialize(app)
 
 @app.post("/api/v1/extract_info/")
 async def extract_user_info(request: dict):
@@ -99,3 +101,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"서버 실행 중 오류 발생: {str(e)}")
         sys.exit(1)
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database_shutdown()
