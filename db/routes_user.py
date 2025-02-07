@@ -12,14 +12,14 @@ from fastapi import APIRouter
 router = APIRouter()
 
 # 사용자 생성 (Create)
-@router.post("/users/create", response_model=UserModel)
+@router.post("/create", response_model=UserModel)
 async def create_user(user: UserModel):
     user_dict = user.model_dump()
     result = await db.users.insert_one(user_dict)
     return {**user_dict, "_id": str(result.inserted_id)}
 
 # 모든 사용자 조회 (Read)
-@router.get("/users/list", response_model=List[UserModel])
+@router.get("/list", response_model=List[UserModel])
 async def get_user_list():
     users = await db.users.find().to_list(100)
     return users
@@ -27,7 +27,7 @@ async def get_user_list():
 ## 이하 코드는 아직 테스트 안 해봄. cursor가 만들어준 코드임.
 
 # 특정 사용자 조회 (Read)
-@router.get("/users/get/{user_id}", response_model=UserModel)
+@router.get("/get/{user_id}", response_model=UserModel)
 async def get_user_by_id(user_id: str):
     user = await db.users.find_one({"id": user_id})
     if user:
@@ -35,7 +35,7 @@ async def get_user_by_id(user_id: str):
     raise HTTPException(status_code=404, detail="User not found")
 
 # 사용자 정보 업데이트 (Update)
-@router.put("/users/update/{user_id}", response_model=UserModel)
+@router.put("/update/{user_id}", response_model=UserModel)
 async def update_user_info(user: UserModel):
     update_result = await db.users.update_one(
         {"id": user.id}, {"$set": user.model_dump()}
@@ -46,7 +46,7 @@ async def update_user_info(user: UserModel):
     raise HTTPException(status_code=404, detail="User not found")
 
 # 사용자 삭제 (Delete)
-@router.delete("/users/delete/{user_id}")
+@router.delete("/delete/{user_id}")
 async def delete_user_by_id(user_id: str):
     delete_result = await db.users.delete_one({"_id": user_id})
     if delete_result.deleted_count == 1:
@@ -54,7 +54,7 @@ async def delete_user_by_id(user_id: str):
     raise HTTPException(status_code=404, detail="User not found")
 
 # 로그인 하지 않은 사용자 임시 등록
-@router.post("/users/register")
+@router.post("/register")
 async def register_user():
     # 쿠키에 임시로 랜덤한 값을 저장하고 그 값을 사용자 아이디로 임시로 사용하도록 구현 예정입니다.
     return {"message": "This endpoint has not been implemented yet."}
