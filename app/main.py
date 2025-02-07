@@ -5,7 +5,9 @@ from langchain_openai import ChatOpenAI
 from app.core.config import settings
 from app.routes import chat_router
 from app.agents.job_advisor import JobAdvisorAgent
-from app.services.vector_store import VectorStoreService
+from app.services.vector_store_ingest import VectorStoreIngest
+from app.services.vector_store_search import VectorStoreSearch
+
 import signal
 import sys
 import json
@@ -19,10 +21,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # startup
     try:
-        logger.info("벡터 스토어를 초기화합니다.")
-        vector_store = VectorStoreService()
-        vector_store.setup_vector_store()
-        logger.info("벡터 스토어 초기화 완료")
+        logger.info("벡터 스토어를 초기화합니다. (ingest)")
+        ingest = VectorStoreIngest()  # DB 생성/로드 담당
+        collection = ingest.setup_vector_store()  # Chroma 객체
+        
+        logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
+        vector_search = VectorStoreSearch(collection)
         
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
@@ -30,8 +34,12 @@ async def lifespan(app: FastAPI):
             temperature=0.7
         )
         
-        app.state.job_advisor_agent = JobAdvisorAgent(llm=llm, vector_store=vector_store)
+        app.state.job_advisor_agent = JobAdvisorAgent(
+            llm=llm,
+            vector_search=vector_search  # 검색 전용 객체 주입
+        )
         logger.info("초기화 완료")
+        
         
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
