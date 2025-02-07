@@ -32,7 +32,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             logger.error(f"[ChatRouter] chat 메서드 실행 중 에러: {str(chat_error)}", exc_info=True)
             raise
 
-        logger.info(f"Response: {response}")  # 응답 내용 로그 추가
+        logger.info(f"Response: {response.get("jobPostings")}")  # 응답 내용 로그 추가
         # 2) dict → ChatResponse
         job_postings_list = []
         for idx, jp in enumerate(response.get("jobPostings", [])):

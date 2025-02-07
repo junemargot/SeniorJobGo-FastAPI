@@ -280,23 +280,23 @@ class JobAdvisorAgent:
                 "user_profile": state.get("user_profile", {})
             }
 
-        # # 2) RAG 프롬프트
-        # rag_chain = generate_prompt | self.llm | StrOutputParser()
-        # doc_text = "\n\n".join([
-        #     f"제목: {doc.metadata.get('채용제목', '')}\n"
-        #     f"회사: {doc.metadata.get('회사명', '')}\n"
-        #     f"지역: {doc.metadata.get('근무지역', '')}\n"
-        #     f"급여: {doc.metadata.get('급여조건', '')}\n"
-        #     f"상세내용: {doc.page_content}"
-        #     for doc in context[:5]  # 혹은 job_postings의 길이
-        # ])
-        # response_text = rag_chain.invoke({
-        #     "question": query,
-        #     "context": doc_text
-        # })
+        # 2) RAG 프롬프트
+        rag_chain = generate_prompt | self.llm | StrOutputParser()
+        doc_text = "\n\n".join([
+            f"제목: {doc.metadata.get('채용제목', '')}\n"
+            f"회사: {doc.metadata.get('회사명', '')}\n"
+            f"지역: {doc.metadata.get('근무지역', '')}\n"
+            f"급여: {doc.metadata.get('급여조건', '')}\n"
+            f"상세내용: {doc.page_content}"
+            for doc in context[:5]  # 혹은 job_postings의 길이
+        ])
+        response_text = rag_chain.invoke({
+            "question": query,
+            "context": doc_text
+        })
 
         return {
-            "message": f"최종 답변:\n{query}",
+            "message": f"최종 답변:\n{response_text}",
             "jobPostings": job_postings,  # retrieve에서 만든 것 재사용
             "type": "jobPosting",
             "user_profile": state.get("user_profile", {})
@@ -333,25 +333,32 @@ class JobAdvisorAgent:
         return workflow.compile()
 
 
-    async def chat(self, query: str, user_profile: dict = None) -> str:
+    async def chat(self, query: str, user_profile: dict = None) -> dict:
         """
-        별도로 agent workflow를 안 쓰고 chat 방식으로만 동작시키고 싶을 때 예시
+        일반 대화 vs. 채용정보 검색:
+        - 최대 5건만 jobPostings에 담음
+        - RAG 프롬프트 결과(문자열)와 함께 message에 통합
+        - 최종적으로 ChatResponse와 호환되는 dict 반환
         """
         try:
             logger.info(f"[JobAdvisor] chat 시작 - 쿼리: {query}")
             logger.info(f"[JobAdvisor] 사용자 프로필: {user_profile}")
-            
-            # base_response = self.chat_agent.chat(query)
-            # logger.info("[JobAdvisor] 기본 응답 생성 완료")
-            
-            if not self.is_job_related(query):
-                logger.info("[JobAdvisor] 일반 대화로 판단됨")
-                follow_up = "\n\n혹시 어떤 일자리를 찾고 계신가요? 선호하시는 근무지역이나 직무가 있으시다면 말씀해 주세요. 😊"
-                return follow_up
-            
-            # job 관련
-            logger.info("[JobAdvisor] 채용정보 검색 시작")
 
+            user_profile = user_profile or {}
+
+            # (A) 일반 대화 판단
+            if not self.is_job_related(query):
+                logger.info("[JobAdvisor] 일반 대화로 판단")
+                # 일반 대화 시, 간단 메시지만 반환
+                return {
+                    "message": "구직 관련 문의가 아니네요. 어떤 일자리를 찾으시는지 말씀해주시면 도와드리겠습니다. 😊",
+                    "jobPostings": [],
+                    "type": "info",
+                    "user_profile": user_profile
+                }
+
+            # (B) 채용정보 검색
+            logger.info("[JobAdvisor] 채용정보 검색 시작")
             user_ner = self._extract_user_ner(query, user_profile)
 
             try:
@@ -359,28 +366,74 @@ class JobAdvisorAgent:
                 logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
             except Exception as search_error:
                 logger.error(f"[JobAdvisor] 검색 중 에러 발생: {str(search_error)}", exc_info=True)
-                raise
-            
+                # 오류 시 빈 jobPostings
+                return {
+                    "message": "죄송합니다. 검색 중 오류가 발생했습니다.",
+                    "jobPostings": [],
+                    "type": "error",
+                    "user_profile": user_profile
+                }
+
             if not results:
-                return "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?"
-            
-            # RAG
-            context = "\n\n".join([
-                f"제목: {doc.metadata.get('채용제목', '')}\n"
-                f"회사: {doc.metadata.get('회사명', '')}\n"
-                f"지역: {doc.metadata.get('근무지역', '')}\n"
-                f"급여: {doc.metadata.get('급여조건', '')}\n"
-                f"상세내용: {doc.page_content}"
-                for doc in results
-            ])
-            generate_chain = generate_prompt | self.llm | StrOutputParser()
-            job_response = generate_chain.invoke({
-                "question": query,
-                "context": context
-            })
-            
-            return job_response
-            
+                # 결과 없음
+                return {
+                    "message": "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
+                    "jobPostings": [],
+                    "type": "info",
+                    "user_profile": user_profile
+                }
+
+            # (C) 최대 5건 추출
+            top_docs = results[:5]
+
+            # (D) Document -> JobPosting 변환
+            job_postings = []
+            for i, doc in enumerate(top_docs, start=1):
+                md = doc.metadata
+                job_postings.append({
+                    "id": md.get("채용공고ID", "no_id"),
+                    "location": md.get("근무지역", ""),
+                    "company": md.get("회사명", ""),
+                    "title": md.get("채용제목", ""),
+                    "salary": md.get("급여조건", ""),
+                    "workingHours": md.get("근무시간", "정보없음"),
+                    "description": md.get("상세정보", doc.page_content[:300]),
+                    "rank": i
+                })
+
+            # # (E) RAG: generate_prompt로 카드 형태 답변 생성
+            # logger.info("[JobAdvisor] RAG Chain 실행")
+            # context_str = "\n\n".join([
+            #     f"제목: {doc.metadata.get('채용제목', '')}\n"
+            #     f"회사: {doc.metadata.get('회사명', '')}\n"
+            #     f"지역: {doc.metadata.get('근무지역', '')}\n"
+            #     f"급여: {doc.metadata.get('급여조건', '')}\n"
+            #     f"상세내용: {doc.page_content}"
+            #     for doc in top_docs
+            # ])
+            # rag_chain = generate_prompt | self.llm | StrOutputParser()
+            # rag_response = rag_chain.invoke({"question": query, "context": context_str})
+
+            if job_postings:
+                msg = f"'{query}' 검색 결과, 상위 {len(job_postings)}건을 반환합니다."
+                res_type = "jobPosting"
+            else:
+                msg = "조건에 맞는 채용공고를 찾지 못했습니다."
+                res_type = "info"
+
+            # (F) 최종 메시지: RAG 결과 문자열
+            return {
+                "message": msg,
+                "jobPostings": job_postings,
+                "type": res_type,
+                "user_profile": user_profile
+        }
+
         except Exception as e:
             logger.error(f"[JobAdvisor] 전체 처리 중 에러 발생: {str(e)}", exc_info=True)
-            return "죄송합니다. 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            return {
+                "message": "죄송합니다. 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "jobPostings": [],
+                "type": "error",
+                "user_profile": user_profile
+            }
