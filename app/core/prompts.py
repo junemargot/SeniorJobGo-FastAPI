@@ -1,6 +1,15 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from app.utils.constants import DICTIONARY
+from app.utils.constants import DICTIONARY  
 
+import re
+
+# 사전 변환 규칙을 적용하는 함수 (DICTIONARY 직접 사용)
+def apply_dictionary_rules(query: str) -> str:
+    """사용자의 질문을 사전(DICTIONARY)에 따라 변환하는 함수"""
+    pattern = re.compile("|".join(map(re.escape, DICTIONARY.keys())))
+    return pattern.sub(lambda match: DICTIONARY[match.group(0)], query)
+
+# 문서 검증 프롬프트
 verify_prompt = PromptTemplate.from_template("""
 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
 
@@ -16,17 +25,17 @@ verify_prompt = PromptTemplate.from_template("""
 답변:
 """)
 
+# 질문 변환 프롬프트 (DICTIONARY 적용됨)
 rewrite_prompt = PromptTemplate.from_template("""
 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
 
-사전: {dictionary}
+원본 질문: {original_query}
 
-질문: {query}
-
-변경된 질문을 출력해주세요:
+변경된 질문: {transformed_query}
 """)
 
+# 채용 공고 추천 프롬프트
 generate_prompt = PromptTemplate.from_template("""
 다음 정보를 바탕으로 구직자에게 도움이 될 만한 답변을 작성해주세요.
 각 채용공고의 지역이 사용자가 찾는 지역과 일치하는지 특히 주의해서 확인해주세요.
@@ -53,7 +62,7 @@ generate_prompt = PromptTemplate.from_template("""
 마지막에는 "더 자세한 정보나 지원 방법이 궁금하시다면 채용공고 번호를 말씀해주세요." 라는 문구를 추가해주세요.
 """)
 
-# 챗봇 페르소나 프롬프트
+# 챗봇 페르소나 설정
 chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상담사입니다. 
 
 페르소나:
@@ -68,13 +77,13 @@ chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상�
 3. 시니어 친화적인 언어 사용
 4. 명확하고 이해하기 쉬운 설명 제공"""
 
-# 기본 대화 프롬프트 템플릿 (CHAT_PROMPT 제거하고 이것만 사용)
+# 기본 대화 프롬프트
 chat_prompt = ChatPromptTemplate.from_messages([
     ("system", chat_persona_prompt),
     ("human", "{query}")  # input -> query로 변경하여 일관성 유지
 ])
 
-# 정보 추출 프롬프트 추가
+# 정보 추출 프롬프트
 EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
 사용자 메시지에서 나이, 희망 근무지역, 희망 직무를 추출해주세요.
 메시지: {query}
@@ -85,4 +94,4 @@ EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
     "location": "추출된 희망 근무지역 (없으면 빈 문자열)",
     "jobType": "추출된 희망 직무 (없으면 빈 문자열)"
 }
-""") 
+""")
