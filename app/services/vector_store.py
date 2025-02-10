@@ -60,7 +60,6 @@ class VectorStoreService:
             
         logger.info(f"Loading vector store from {self.persist_directory}")
         try:
-<<<<<<< HEAD
             # 이미 생성된 Chroma DB가 있는지 확인
             if os.path.exists(self.persist_directory) and os.path.isdir(self.persist_directory):
                 print("기존 벡터 스토어를 불러옵니다.")
@@ -117,12 +116,6 @@ class VectorStoreService:
             db = Chroma.from_documents(
                 documents=documents,
                 embedding=self.embeddings,
-=======
-            # 기존 collection 로드
-            self._collection = Chroma(
-                embedding_function=self.embedding_model,
-                collection_name="job_postings",
->>>>>>> c5f2a41f293389a9d784c9b33939751d6581fe5a
                 persist_directory=self.persist_directory
             )
             
