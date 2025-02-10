@@ -14,3 +14,6 @@ chromadb==0.4.15
 tiktoken==0.5.1
 python-dotenv==1.0.0
 nest_asyncio==1.5.8
+selenium>=4.16.0
+webdriver-manager>=4.0.1
+pydantic>=2.5.0
