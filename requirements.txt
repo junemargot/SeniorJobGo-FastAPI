@@ -17,3 +17,4 @@ nest_asyncio
 
 motor
 pymongo
+bcrypt

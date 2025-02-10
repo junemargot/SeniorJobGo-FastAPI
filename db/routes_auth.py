@@ -2,26 +2,38 @@
 회원 인증 관련 라우트 정의
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from datetime import datetime
+import bcrypt
+import uuid
 from .database import db
 from .models import UserModel
-from datetime import datetime
 router = APIRouter()
+
+
+# 비밀번호 해싱 함수
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+# 비밀번호 검증 함수
+def verify_password(password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed_password.encode())
 
 # 사용자 회원가입 (Signup)
 @router.post("/signup")
-async def signup_user(request: Request):
+async def signup_user(request: Request, response: Response):
     data = await request.json()
-    print(data)
-    user = UserModel(id=data.get("userId"), password=data.get("password"), provider="local")
+    user = UserModel(id=data.get("userId"), password=hash_password(data.get("password")), provider="local")
 
     user_dict = user.model_dump()
     result = await db.users.insert_one(user_dict)
+    response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
     return {**user_dict, "_id": str(result.inserted_id)}
+
 
 # 사용자 로그인 (Login)
 @router.post("/login")
-async def login_user(request: Request) -> UserModel:
+async def login_user(request: Request, response: Response) -> bool:
     data = await request.json()
     user_id = data.get("user_id")
     password = data.get("password")
@@ -30,9 +42,12 @@ async def login_user(request: Request) -> UserModel:
     if provider == "local":
         user = await db.users.find_one({"id": user_id, "provider": "local"})
         if user:
-            if user["password"] == password:
-                await db.users.update_one({"_id": user["_id"]}, {"$set": {"last_login": datetime.now()}})
-                return {**user, "password": None}
+            if verify_password(password, user["password"]):
+                _id = str(user["_id"])
+                await db.users.update_one({"_id": _id}, {"$set": {"last_login": datetime.now()}})
+                response.set_cookie(key="sjgid", value=str(_id), max_age=60*60*24*30)
+                return True
+
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # 사용자 카카오 로그인 (Kakao Login)
@@ -47,8 +62,25 @@ async def check_id(request: Request):
     data = await request.json()
     user_id = data.get("id")
     user = await db.users.find_one({"id": user_id})
-    print(user is not None)
     return {"is_duplicate": user is not None}
+
+# 비회원 로그인 (Guest Login)
+@router.post("/login/guest")
+async def guest_login(response: Response):
+    user = UserModel(id=str(uuid.uuid4()), password=hash_password("guest"), provider="none")
+
+    user_dict = user.model_dump()
+    result = await db.users.insert_one(user_dict)
+    response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
+    return {**user_dict, "_id": str(result.inserted_id)}
+
+# 비회원 전부 삭제
+@router.get("/delete/guest")
+async def delete_guest():
+    await db.users.delete_many({"provider": "none"})
+    return {"message": "All guest user deleted"}
+
+
 
 ## 추후 개선 사항
 # - 비밀번호 암호화
