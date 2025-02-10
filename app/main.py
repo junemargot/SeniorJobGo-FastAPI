@@ -38,25 +38,22 @@ async def lifespan(app: FastAPI):
         
 
         # 라우터 등록
+        logger.info("데이터베이스 초기화 및 라우터를 등록합니다.")
         database_initialize(app)
-        print("데이터베이스 초기화 및 관련 라우터 등록 완료")
         from app.routes import chat_router
         app.include_router(chat_router.router, prefix="/api/v1")
-        print("라우터 등록 완료")
+        logger.info("데이터베이스 초기화 및 라우터 등록 완료")
 
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
         raise
         
     yield
-    
+    # 데이터베이스 종료
+    database_shutdown()
+
     # shutdown
     logger.info("서버를 종료합니다...")
-
-    # 데이터베이스 종료
-    logger.info("데이터베이스를 종료합니다.")
-    database_shutdown()
-    logger.info("데이터베이스 종료 완료")
 
 # FastAPI 앱 생성 시 lifespan 설정
 app = FastAPI(lifespan=lifespan)

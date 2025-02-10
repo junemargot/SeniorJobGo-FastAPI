@@ -10,6 +10,7 @@ class ChatModel(BaseModel):
     index: int = Field(..., ge=0)  # 대화 인덱스. 0 이상
     role: str = Field(..., pattern="^(user|bot)$")  # 대화 역할. 'user' 또는 'bot'만 허용
     content: str = Field(..., min_length=1)  # 대화 내용. 최소 1자
+    options: Optional[List[dict]] = Field(None)  # 대화 옵션. 선택적
     created_at: datetime = Field(default_factory=datetime.now)  # 대화 생성 시간
 
 class UserModel(BaseModel):
@@ -23,7 +24,16 @@ class UserModel(BaseModel):
     hope_location: Optional[str] = Field(None, max_length=100)  # 희망 근무지. 최대 100자
     hope_salary: Optional[int] = None  # 희망 급여. 0 이상
     education: Optional[str] = Field(None, pattern="^(high_school|college|university|graduate)$")  # 학력. 'high_school', 'college', 'university', 'graduate'만 허용
-    messages: List[ChatModel] = []  # 사용자의 채팅 메시지 목록
+    messages: List[ChatModel] = [{
+            "role" : "bot",
+            "content" : "안녕하세요. AI 취업도우미입니다.\n어떤 도움이 필요하신가요?",
+            "index" : 0,
+            "options" : [
+                { "id" : 1, "text" : '채용 정보' },
+                { "id" : 2, "text" : '훈련 정보' },
+                { "id" : 3, "text" : '이력서 관리' }
+            ]
+        }]  # 사용자의 채팅 메시지 목록
     created_at: datetime = Field(default_factory=datetime.now)  # 생성 시간
     last_login: datetime = Field(default_factory=datetime.now)  # 마지막 로그인 시간
 
