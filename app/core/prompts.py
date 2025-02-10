@@ -1,5 +1,5 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from app.utils.constants import DICTIONARY
+# from app.utils.constants import DICTIONARY  # 제거 - job_advisor.py에서만 사용
 
 verify_prompt = PromptTemplate.from_template("""
 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
