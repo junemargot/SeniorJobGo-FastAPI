@@ -137,11 +137,14 @@ def setup_vector_store():
             
             content = job.get("상세정보", {}).get("직무내용", "")
             if content:
-                doc = Document(
-                    page_content=content,
-                    metadata=metadata
-                )
-                documents.append(doc)
+                # text_splitter를 사용하여 긴 텍스트를 청크로 분할
+                chunks = text_splitter.split_text(content)
+                for chunk in chunks:
+                    doc = Document(
+                        page_content=chunk,
+                        metadata=metadata
+                    )
+                    documents.append(doc)
         
         print(f"\n문서 로드 완료: {len(documents)}개의 문서")
         if len(documents) == 0:
@@ -172,40 +175,39 @@ def setup_vector_store():
 def retrieve(state: AgentState):
     query = state['query']
     
-    # 기본 검색
-    docs = vector_store.similarity_search(query, k=10)  # 더 많은 문서를 가져옴
-    print(f"기본 검색 결과: {len(docs)}개 문서")
-    
-    # 사용자 지역 정보 확인 (전체 문자열에서 지역명 찾기)
-    user_location = None
+    # 사용자 지역 정보 확인
     locations = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종"]
+    user_location = None
     for loc in locations:
         if loc in query:
             user_location = loc
             break
     
-    # 지역 기반 필터링
+    # 검색 필터 설정
+    search_filter = None
     if user_location:
-        filtered_docs = []
-        print(f"\n=== 지역 검색 디버그 정보 ===")
-        print(f"검색 지역: {user_location}")
-        for doc in docs:
-            location = doc.metadata.get("location", "")
-            print(f"문서 지역: {location}")
-            # 지역명이 포함되어 있는지 확인 (시/군/구 포함)
-            if (user_location in location) or (f"{user_location}시" in location) or (f"{user_location}특별시" in location):
-                filtered_docs.append(doc)
-                print(f"매칭된 문서: {doc.metadata.get('title', '')}")
-        
-        # 필터링된 문서가 있으면 그것을 사용
-        if filtered_docs:
-            print(f"\n지역 '{user_location}'에 대한 검색 결과: {len(filtered_docs)}개 문서 발견")
-            return {'context': filtered_docs[:3]}  # 상위 3개 반환
-        else:
-            print(f"\n지역 '{user_location}'에 대한 검색 결과가 없습니다.")
+        # 지역명이 포함된 문서만 검색 (시/군/구 포함)
+        search_filter = {
+            "$or": [
+                {"location": {"$contains": user_location}},
+                {"location": {"$contains": f"{user_location}시"}},
+                {"location": {"$contains": f"{user_location}특별시"}}
+            ]
+        }
+        print(f"\n지역 '{user_location}'에 대한 필터 적용 검색을 시작합니다.")
     
-    # 지역 필터링 결과가 없거나 지역이 지정되지 않은 경우 기본 검색 결과 사용
-    return {'context': docs[:3]}  # 상위 3개 반환
+    # 필터를 적용하여 한 번에 검색
+    docs = vector_store.similarity_search(
+        query,
+        k=5,  # 상위 5개 결과
+        filter=search_filter
+    )
+    
+    print(f"검색 결과: {len(docs)}개 문서 발견")
+    if user_location:
+        print(f"- 지역 필터 '{user_location}' 적용됨")
+    
+    return {'context': docs}
 
 # Verify 노드
 def verify(state: AgentState) -> dict:
@@ -274,17 +276,20 @@ def generate(state: AgentState) -> dict:
     rewrite_count = state.get('rewrite_count', 0)
     answers = state.get('answers', [])
     
-    generate_prompt = PromptTemplate.from_template("""
+    # chat_persona_prompt와 generate_prompt를 결합
+    combined_prompt = PromptTemplate.from_template(f"""
+{chat_persona_prompt}
+
 다음 정보를 바탕으로 구직자에게 도움이 될 만한 답변을 작성해주세요.
 각 채용공고의 지역이 사용자가 찾는 지역과 일치하는지 특히 주의해서 확인해주세요.
 
-질문: {question}
+질문: {{question}}
 
 참고할 문서:
-{context}
+{{context}}
 
 답변 형식:
-발견된 채용공고를 다음과 같은 카드 형태로 보여주세요:
+발견된 채용공고를 다음과 같은 카드 형태로 보여주되, 시니어 구직자가 이해하기 쉽게 친근하고 명확한 언어로 설명해주세요:
 
 [구분선]
 📍 [지역구] • [회사명]
@@ -296,11 +301,11 @@ def generate(state: AgentState) -> dict:
 
 [구분선]
 
-각 공고마다 위와 같은 형식으로 보여주되, 구직자가 이해하기 쉽게 명확하고 구체적으로 작성해주세요.
+각 공고마다 위와 같은 형식으로 보여주되, 시니어 구직자의 눈높이에 맞춰 이해하기 쉽게 작성해주세요.
 마지막에는 "더 자세한 정보나 지원 방법이 궁금하시다면 채용공고 번호를 말씀해주세요." 라는 문구를 추가해주세요.
 """)
     
-    rag_chain = generate_prompt | llm | StrOutputParser()
+    rag_chain = combined_prompt | llm | StrOutputParser()
     response = rag_chain.invoke({
         "question": query,
         "context": "\n\n".join([
