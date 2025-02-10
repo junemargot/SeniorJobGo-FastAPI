@@ -57,13 +57,17 @@ class VectorStoreService:
                 
                 content = job.get("상세정보", {}).get("직무내용", "")
                 if content:
-                    doc = Document(
-                        page_content=content,
-                        metadata=metadata
-                    )
-                    documents.append(doc)
+                    # text_splitter를 사용하여 긴 텍스트를 청크로 분할
+                    chunks = self.text_splitter.split_text(content)
+                    for chunk in chunks:
+                        doc = Document(
+                            page_content=chunk,
+                            metadata=metadata
+                        )
+                        documents.append(doc)
+                    print(f"  - {len(chunks)}개의 청크로 분할됨")
             
-            print(f"\n문서 로드 완료: {len(documents)}개의 문서")
+            print(f"\n문서 로드 완료: {len(documents)}개의 문서 청크")
             if len(documents) == 0:
                 raise ValueError("처리할 수 있는 문서가 없습니다.")
             
