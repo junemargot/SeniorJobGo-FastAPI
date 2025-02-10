@@ -1,94 +1,92 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, Response
+from pydantic import BaseModel
+import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting
+from db.database import db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # 이전 대화 내용을 저장할 딕셔너리
 conversation_history = {}
 
-@router.post("/chat/", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
+class ChatRequest(BaseModel):
+    user_message: str
+    user_profile: dict = None
+    session_id: str = "default_session"
+
+@router.post("/chat/")
+async def chat(request: Request, chat_request: ChatRequest, response: Response):
     try:
-        print(f"받은 메시지: {request.user_message}")
-        print(f"사용자 프로필: {request.user_profile}")
-        
-        # 세션 ID로 대화 기록 관리
-        session_id = request.session_id or "default"
-        if session_id not in conversation_history:
-            conversation_history[session_id] = {
-                "messages": [],
-                "last_context": None
-            }
-        
-        # 이전 컨텍스트 확인
-        history = conversation_history[session_id]
-        
-        # 숫자로 시작하는 질문이면 이전 컨텍스트 재사용
-        if request.user_message[0].isdigit() and history["last_context"]:
-            print("이전 검색 결과를 재사용합니다.")
-            context = history["last_context"]
-            
-            number = int(request.user_message[0]) - 1
-            if 0 <= number < len(context):
-                job = context[number]
-                response = f"""
-[구분선]
-📍 {job.metadata.get('location', '')} • {job.metadata.get('company', '')}
-{job.metadata.get('title', '')}
-
-💰 급여: {job.metadata.get('salary', '')}
-⏰ 근무시간: 상세 페이지 참조
-📋 주요업무: {job.page_content}
-
-✨ 복리후생: 상세 페이지 참조
-[구분선]
-"""
-            else:
-                response = "죄송합니다. 해당 번호의 채용공고를 찾을 수 없습니다."
+        if db is None:
+            raise Exception("db is None")
         else:
-            # 새로운 검색 수행
-            initial_state = {
-                'query': request.user_message,
-                'answers': [],
-                'rewrite_count': 0,
-                'should_rewrite': False
+            print("db is not None")
+
+        logger.info(f"[ChatRouter] 채팅 요청 시작")
+        logger.info(f"[ChatRouter] 메시지: {chat_request.user_message}")
+        logger.info(f"[ChatRouter] 프로필: {chat_request.user_profile}")
+        
+        job_advisor_agent = request.app.state.job_advisor_agent
+        if job_advisor_agent is None:
+            logger.error("[ChatRouter] job_advisor_agent가 초기화되지 않음")
+            return {"error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요."}
+        
+        try:
+            response = await job_advisor_agent.chat(
+                query=chat_request.user_message,
+                user_profile=chat_request.user_profile
+            )
+
+            # 쿠키를 사용해서 사용자 아이디를 가져오려고 하였으나 아직 쿠키를 구현하지 않아서 임시로 테스트 아이디를 사용함.
+            # _id = request.cookies["jobgo_original_id"]
+            # if _id is None:
+            user = await db.users.find_one({"id": "test", "provider": "local"})
+            try: 
+                _id = str(user.inserted_id)
+                print(_id)
+            except:
+                _id = "67a456e80ed048faeffa33dd"
+                print("test 고유 아이디 사용")
+
+            if user is None:
+                raise Exception("user is None")
+            else:
+                print("user: ", user)
+
+            legacy_messages = user["messages"] or []  # None일 경우 빈 배열로 초기화
+            chat_index = len(legacy_messages)
+
+            user_message = {
+                "role": "user",
+                "content": chat_request.user_message,
+                "index": chat_index
             }
+
+            bot_message = {
+                "role": "bot",
+                "content": response,
+                "index": chat_index + 1
+            }
+
+            db.users.update_one({"id": "test", "provider": "local"}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
+            print("메시지 업데이트 완료")
+            logger.info("[ChatRouter] 응답 생성 완료")
+        except Exception as chat_error:
+            logger.error(f"[ChatRouter] chat 메서드 실행 중 에러: {str(chat_error)}", exc_info=True)
+            raise
             
-            from app.main import job_advisor_agent
-            result = job_advisor_agent.workflow.invoke(initial_state)
-            context = result.get('context', [])
-            history["last_context"] = context
-            response = result.get('answer', '죄송합니다. 검색 결과가 없습니다.')
-        
-        # 대화 기록 업데이트
-        history["messages"].append(f"사용자: {request.user_message}")
-        history["messages"].append(f"시스템: {response}")
-        
-        # 응답 변환
-        job_postings = []
-        if context:
-            for idx, doc in enumerate(context, 1):
-                job = JobPosting(
-                    id=idx,
-                    title=doc.metadata.get("title", ""),
-                    company=doc.metadata.get("company", ""),
-                    location=doc.metadata.get("location", ""),
-                    salary=doc.metadata.get("salary", ""),
-                    workingHours="상세 페이지 참조",
-                    description=doc.page_content[:100] + "...",  # 미리보기
-                    requirements="",
-                    benefits="",
-                    applicationMethod=""
-                )
-                job_postings.append(job)
-        
-        return ChatResponse(
-            type="list" if not request.user_message[0].isdigit() else "detail",
-            message=response,
-            jobPostings=job_postings,
-            user_profile=request.user_profile
-        )
+        return {
+            "type": "chat",
+            "message": response if isinstance(response, str) else str(response),
+            "jobPostings": []
+        }
         
     except Exception as e:
-        print(f"채팅 엔드포인트 오류: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.error(f"[ChatRouter] 전체 처리 중 에러: {str(e)}", exc_info=True)
+        return {
+            "type": "error",
+            "message": "처리 중 오류가 발생했습니다.",
+            "jobPostings": []
+        } 
