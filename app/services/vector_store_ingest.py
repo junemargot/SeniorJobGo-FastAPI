@@ -13,6 +13,7 @@ from langchain.docstore.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
+from app.utils.embeddings import SentenceTransformerEmbeddings  # 변경
 
 load_dotenv()
 
@@ -22,17 +23,6 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 # 1) 임베딩 클래스
 ###############################################################################
-class SentenceTransformerEmbeddings:
-    def __init__(self, model_name: str):
-        self.model = SentenceTransformer(model_name)
-        
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        embeddings = self.model.encode(texts)
-        return embeddings.tolist()  # NumPy 배열을 Python 리스트로 변환
-        
-    def embed_query(self, text: str) -> List[float]:
-        embedding = self.model.encode(text)
-        return embedding.tolist()  # NumPy 배열을 Python 리스트로 변환
 
 
 ###############################################################################
@@ -45,14 +35,11 @@ class VectorStoreIngest:
     - setup_vectorstore()로 DB 생성 또는 로드
     """
 
-    def __init__(self, persist_directory: Optional[str] = None):
-        self.embedding_model = SentenceTransformerEmbeddings("nlpai-lab/KURE-v1")
+    def __init__(self, embedding_model: SentenceTransformerEmbeddings):
+        self.embedding_model = embedding_model  # 외부에서 주입받도록 수정
 
         # 기본 경로 설정
-        if persist_directory is None:
-            self.persist_directory = str(Path(__file__).parent.parent.parent / "jobs_collection")
-        else:
-            self.persist_directory = persist_directory
+        self.persist_directory = str(Path(__file__).parent.parent.parent / "jobs_collection")
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=100,

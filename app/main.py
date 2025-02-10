@@ -7,6 +7,7 @@ from app.routes import chat_router
 from app.agents.job_advisor import JobAdvisorAgent
 from app.services.vector_store_ingest import VectorStoreIngest
 from app.services.vector_store_search import VectorStoreSearch
+from app.utils.embeddings import SentenceTransformerEmbeddings
 
 import signal
 import sys
@@ -15,23 +16,36 @@ import logging
 from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
 
+# 로깅 설정을 더 자세하게
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
     try:
+        # 임베딩 모델 초기화 - 공통으로 사용
+        embedding_model = SentenceTransformerEmbeddings("nlpai-lab/KURE-v1")
+        
         logger.info("벡터 스토어를 초기화합니다. (ingest)")
-        ingest = VectorStoreIngest()  # DB 생성/로드 담당
-        collection = ingest.setup_vector_store()  # Chroma 객체
+        ingest = VectorStoreIngest(embedding_model=embedding_model)
+        collection = ingest.setup_vector_store()
         
         logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
-        vector_search = VectorStoreSearch(collection)
+        vector_search = VectorStoreSearch(
+            collection=collection,
+            embedding_model=embedding_model
+        )
         
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
-            temperature=0.7
+            model_name="gpt-4",
+            temperature=0.7,
+            request_timeout=30
         )
         
         app.state.job_advisor_agent = JobAdvisorAgent(
@@ -62,11 +76,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 전역 변수
-vector_store = None
-job_advisor_agent = None
-llm = None
-
 def signal_handler(sig, frame):
     """
     시그널 핸들러 - SIGINT(Ctrl+C)나 SIGTERM 시그널을 받으면 실행됨
@@ -83,7 +92,9 @@ app.include_router(chat_router.router, prefix="/api/v1")
 async def extract_user_info(request: dict):
     try:
         user_message = request.get("user_message", "")
-        response = llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
+        response = app.state.job_advisor_agent.llm.invoke(
+            EXTRACT_INFO_PROMPT.format(query=user_message)
+        )
         info = json.loads(response)
         return info
     except Exception as e:
