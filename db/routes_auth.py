@@ -22,14 +22,30 @@ def verify_password(password: str, hashed_password: str) -> bool:
 # 사용자 회원가입 (Signup)
 @router.post("/signup")
 async def signup_user(request: Request, response: Response):
-    data = await request.json()
-    user = UserModel(id=data.get("userId"), password=hash_password(data.get("password")), provider="local")
+    try:
+        data = await request.json()
+        
+        # userId를 id로 변환
+        user_id = data.get("userId")  # "userId"로 변경
+        user = await db.users.find_one({"id": user_id})
 
-    user_dict = user.model_dump()
-    result = await db.users.insert_one(user_dict)
-    response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
-    return {**user_dict, "_id": str(result.inserted_id)}
+        if user:
+            raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
 
+        # UserModel 생성 시 id 필드명 사용
+        user = UserModel(
+            id=user_id,  
+            password=hash_password(data.get("password")),
+            provider="local"
+        )
+
+        user_dict = user.model_dump()
+        result = await db.users.insert_one(user_dict)
+        response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
+        return {**user_dict, "_id": str(result.inserted_id)}
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="회원가입에 실패했습니다.")
 
 # 사용자 로그인 (Login)
 @router.post("/login")
