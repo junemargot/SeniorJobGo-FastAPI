@@ -12,10 +12,10 @@ import os
 import json
 
 from langchain_openai import ChatOpenAI
+
 from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import Runnable
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -90,11 +90,13 @@ class JobAdvisorAgent:
 
         return EXTRACT_INFO_PROMPT | llm
 
+
     def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str]) -> Dict[str, str]:
         """
         (1) 사용자 입력 NER 추출
         (1-1) NER 데이터가 없거나 누락된 항목은 user_profile (age, location, jobType)로 보완
         """
+
         try:
             # 1) 사용자 입력 NER
             ner_chain = self.get_user_ner_runnable()
@@ -131,6 +133,7 @@ class JobAdvisorAgent:
                 "연령대": user_profile.get("age", "")
             }
 
+
     ###############################################################################
     # (B) 일반 대화/채용정보 검색 라우팅
     ###############################################################################
@@ -151,49 +154,60 @@ class JobAdvisorAgent:
                 "context": [],
                 "query": query
             }
-        
+
+        # (2) job 검색
         logger.info("[JobAdvisor] 채용정보 검색 시작")
+        user_profile = state.get("user_profile", {})
+        user_ner = self._extract_user_ner(query, user_profile)
+
         try:
-            # 직접 검색 수행 (필터 없이)
-            results = self.vector_store.search_jobs(
-                query=query,
-                top_k=10
-            )
+            results = self.vector_search.search_jobs(user_ner=user_ner, top_k=10)
             logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
-            
-            if results:
-                context_str = "\n\n".join([
-                    f"제목: {doc.metadata.get('채용제목', '')}\n"
-                    f"회사: {doc.metadata.get('회사명', '')}\n"
-                    f"지역: {doc.metadata.get('근무지역', '')}\n"
-                    f"급여: {doc.metadata.get('급여조건', '')}\n"
-                    f"상세내용: {doc.page_content}"
-                    for doc in results
-                ])
-                
-                logger.info("[JobAdvisor] RAG Chain 실행")
-                rag_chain = generate_prompt | self.llm | StrOutputParser()
-                response = rag_chain.invoke({
-                    "question": query,
-                    "context": context_str
-                })
-                logger.info("[JobAdvisor] 응답 생성 완료")
-                
-                return {
-                    'answer': response,
-                    'is_job_query': True,
-                    'context': results,
-                    'query': query
-                }
-                
         except Exception as e:
             logger.error(f"[JobAdvisor] 검색 중 에러 발생: {str(e)}", exc_info=True)
-            
+            return {
+                "message": "죄송합니다. 검색 중 오류가 발생했습니다.",
+                "jobPostings": [],
+                "type": "info",
+                "user_profile": user_profile,
+                "context": [],
+                "query": query
+            }
+
+        # (3) 최대 5건만 추출
+        top_docs = results[:5]
+
+        # (4) Document -> JobPosting 변환
+        job_postings = []
+        for i, doc in enumerate(top_docs, start=1):
+            md = doc.metadata
+            job_postings.append({
+                "id": md.get("채용공고ID", "no_id"),
+                "location": md.get("근무지역", ""),
+                "company": md.get("회사명", ""),
+                "title": md.get("채용제목", ""),
+                "salary": md.get("급여조건", ""),
+                "workingHours": md.get("근무시간", "정보없음"),
+                "description": md.get("상세정보", doc.page_content[:200]),
+                "rank": i
+            })
+
+        # (5) 메시지 / 타입
+        if job_postings:
+            msg = f"'{query}' 검색 결과, 상위 {len(job_postings)}건을 반환합니다."
+            res_type = "jobPosting"
+        else:
+            msg = "조건에 맞는 채용공고를 찾지 못했습니다."
+            res_type = "info"
+
+        # (6) ChatResponse 호환 dict
         return {
-            'answer': "죄송합니다. 관련된 구인정보를 찾지 못했습니다.",
-            'is_job_query': True,
-            'context': [],
-            'query': query
+            "message": msg,
+            "jobPostings": job_postings,
+            "type": res_type,
+            "user_profile": user_profile,
+            "context": results,  # 다음 노드(verify 등)에서 사용
+            "query": query
         }
 
     ###############################################################################
@@ -306,6 +320,7 @@ class JobAdvisorAgent:
 
 
     async def chat(self, query: str, user_profile: dict = None) -> dict:
+
         """
         일반 대화 vs. 채용정보 검색:
         - 최대 5건만 jobPostings에 담음
@@ -344,6 +359,7 @@ class JobAdvisorAgent:
             logger.info("[JobAdvisor] 채용정보 검색 시작")
             user_ner = self._extract_user_ner(query, user_profile)
 
+
             try:
                 results = self.vector_search.search_jobs(user_ner, top_k=10)
                 logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
@@ -354,7 +370,9 @@ class JobAdvisorAgent:
                     "message": "죄송합니다. 검색 중 오류가 발생했습니다.",
                     "jobPostings": [],
                     "type": "error",
-                    "user_profile": user_profile
+
+                    "user_profile": user_profile or {}
+
                 }
 
             if not results:
@@ -363,7 +381,11 @@ class JobAdvisorAgent:
                     "message": "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
                     "jobPostings": [],
                     "type": "info",
-                    "user_profile": user_profile
+
+                    "user_profile": user_profile or {}
+
+                 
+
                 }
 
             # (C) 최대 5건 추출
@@ -384,18 +406,7 @@ class JobAdvisorAgent:
                     "rank": i
                 })
 
-            # # (E) RAG: generate_prompt로 카드 형태 답변 생성
-            # logger.info("[JobAdvisor] RAG Chain 실행")
-            # context_str = "\n\n".join([
-            #     f"제목: {doc.metadata.get('채용제목', '')}\n"
-            #     f"회사: {doc.metadata.get('회사명', '')}\n"
-            #     f"지역: {doc.metadata.get('근무지역', '')}\n"
-            #     f"급여: {doc.metadata.get('급여조건', '')}\n"
-            #     f"상세내용: {doc.page_content}"
-            #     for doc in top_docs
-            # ])
-            # rag_chain = generate_prompt | self.llm | StrOutputParser()
-            # rag_response = rag_chain.invoke({"question": query, "context": context_str})
+
 
             if job_postings:
                 msg = f"'{query}' 검색 결과, 상위 {len(job_postings)}건을 반환합니다."
@@ -409,8 +420,10 @@ class JobAdvisorAgent:
                 "message": msg,
                 "jobPostings": job_postings,
                 "type": res_type,
-                "user_profile": user_profile
-        }
+
+                "user_profile": user_profile or {}
+            }
+
 
         except Exception as e:
             logger.error(f"[JobAdvisor] 전체 처리 중 에러 발생: {str(e)}", exc_info=True)
@@ -418,5 +431,7 @@ class JobAdvisorAgent:
                 "message": "죄송합니다. 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
                 "jobPostings": [],
                 "type": "error",
-                "user_profile": user_profile
+
+                "user_profile": user_profile or {}
+
             }

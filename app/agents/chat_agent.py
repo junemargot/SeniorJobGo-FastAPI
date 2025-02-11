@@ -18,6 +18,7 @@ class ChatAgent:
                 ("human", "{input}"),
             ])
             
+
             chat_chain = chat_prompt | self.llm | StrOutputParser()
             response = chat_chain.invoke({"input": user_message})
             
@@ -28,4 +29,5 @@ class ChatAgent:
             
         except Exception as e:
             logger.error(f"ChatAgent 처리 중 에러 발생: {str(e)}")
+
             return "죄송합니다. 대화 처리 중 문제가 발생했습니다. 다시 말씀해 주시겠어요?" 
