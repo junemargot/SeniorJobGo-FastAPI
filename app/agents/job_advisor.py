@@ -3,7 +3,7 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
-from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt
+from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt, EXTRACT_INFO_PROMPT
 from app.utils.constants import LOCATIONS, DICTIONARY
 from app.agents.chat_agent import ChatAgent
 from app.services.vector_store_search import VectorStoreSearch
@@ -11,7 +11,7 @@ import logging
 import os
 import json
 
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import Runnable
 
@@ -88,52 +88,48 @@ class JobAdvisorAgent:
             temperature=0.0
         )
 
-        prompt = PromptTemplate(
-            input_variables=["user_query"],
-            template=(
-                "사용자 입력: {user_query}\n\n"
-                "아래 항목을 JSON으로 추출 (값이 없으면 빈 문자열로):\n"
-                "- 직무\n"
-                "- 지역\n"
-                "- 연령대\n\n"
-                "예:\n"
-                "json\n"
-                "{{\"직무\": \"요양보호사\", \"지역\": \"서울\", \"연령대\": \"\"}}\n"
-                "\n"
-            )
-        )
-        return prompt | llm
+        return EXTRACT_INFO_PROMPT | llm
 
     def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str]) -> Dict[str, str]:
         """
         (1) 사용자 입력 NER 추출
         (1-1) NER 데이터가 없거나 누락된 항목은 user_profile (age, location, jobType)로 보완
         """
-        # 1) 사용자 입력 NER
-        ner_chain = self.get_user_ner_runnable()
-        ner_res = ner_chain.invoke({"user_query": user_message})
-        ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
-        cleaned = ner_str.replace("```json", "").replace("```", "").strip()
-
         try:
-            user_ner = json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
-            user_ner = {}
+            # 1) 사용자 입력 NER
+            ner_chain = self.get_user_ner_runnable()
+            ner_res = ner_chain.invoke({"user_query": user_message})
+            ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
+            cleaned = ner_str.replace("```json", "").replace("```", "").strip()
 
-        logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
+            try:
+                user_ner = json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
+                user_ner = {"직무": "", "지역": "", "연령대": ""}
 
-        # 1-1) 프로필 보완
-        # user_profile: {"age":"", "location":"", "jobType":""}
-        if not user_ner.get("직무") and user_profile.get("jobType"):
-            user_ner["직무"] = user_profile["jobType"]
-        if not user_ner.get("지역") and user_profile.get("location"):
-            user_ner["지역"] = user_profile["location"]
-        if not user_ner.get("연령대") and user_profile.get("age"):
-            user_ner["연령대"] = user_profile["age"]
+            logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
 
-        logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
-        return user_ner
+            # 1-1) 프로필 보완
+            # user_profile: {"age":"", "location":"", "jobType":""}
+            if not user_ner.get("직무") and user_profile.get("jobType"):
+                user_ner["직무"] = user_profile["jobType"]
+            if not user_ner.get("지역") and user_profile.get("location"):
+                user_ner["지역"] = user_profile["location"]
+            if not user_ner.get("연령대") and user_profile.get("age"):
+                user_ner["연령대"] = user_profile["age"]
+
+            logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
+            return user_ner
+            
+        except Exception as e:
+            logger.error(f"[JobAdvisor] NER 추출 중 에러 발생: {str(e)}")
+            # 에러 발생 시 기본값 반환
+            return {
+                "직무": user_profile.get("jobType", ""),
+                "지역": user_profile.get("location", ""),
+                "연령대": user_profile.get("age", "")
+            }
 
     ###############################################################################
     # (B) 일반 대화/채용정보 검색 라우팅
@@ -325,13 +321,24 @@ class JobAdvisorAgent:
             # (A) 일반 대화 판단
             if not self.is_job_related(query):
                 logger.info("[JobAdvisor] 일반 대화로 판단")
-                # 일반 대화 시, 간단 메시지만 반환
-                return {
-                    "message": "구직 관련 문의가 아니네요. 어떤 일자리를 찾으시는지 말씀해주시면 도와드리겠습니다. 😊",
-                    "jobPostings": [],
-                    "type": "info",
-                    "user_profile": user_profile
-                }
+                try:
+                    # ChatAgent를 통한 자연스러운 대화 처리
+                    chat_response = await self.chat_agent.chat(query)
+                    logger.info(f"[JobAdvisor] ChatAgent 응답: {chat_response}")
+                    return {
+                        "message": chat_response,
+                        "jobPostings": [],
+                        "type": "info",
+                        "user_profile": user_profile
+                    }
+                except Exception as chat_error:
+                    logger.error(f"[JobAdvisor] 일반 대화 처리 중 에러: {str(chat_error)}")
+                    return {
+                        "message": "죄송합니다. 지금은 대화하기 어려운 상황이에요. 잠시 후에 다시 말씀해 주시겠어요?",
+                        "jobPostings": [],
+                        "type": "error",
+                        "user_profile": user_profile
+                    }
 
             # (B) 채용정보 검색
             logger.info("[JobAdvisor] 채용정보 검색 시작")

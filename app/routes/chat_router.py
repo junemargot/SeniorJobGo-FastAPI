@@ -20,6 +20,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             print("db is not None")
 
         _id = request.cookies.get("sjgid")
+        print(f"request.cookies: {request.cookies}")
         if _id:
             user = await db.users.find_one({"_id": ObjectId(_id)})
         else:
