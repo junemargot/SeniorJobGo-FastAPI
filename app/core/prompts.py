@@ -86,12 +86,12 @@ chat_prompt = ChatPromptTemplate.from_messages([
 # 정보 추출 프롬프트
 EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
 사용자 메시지에서 나이, 희망 근무지역, 희망 직무를 추출해주세요.
-메시지: {query}
+메시지: {user_query}
 
 다음 형식의 JSON으로 응답해주세요:
-{
-    "age": "추출된 나이 (없으면 빈 문자열)",
-    "location": "추출된 희망 근무지역 (없으면 빈 문자열)",
-    "jobType": "추출된 희망 직무 (없으면 빈 문자열)"
-}
+{{
+    "직무": "추출된 희망 직무 (없으면 빈 문자열)",
+    "지역": "추출된 희망 근무지역 (없으면 빈 문자열)",
+    "연령대": "추출된 나이 (없으면 빈 문자열)"
+}}
 """)
