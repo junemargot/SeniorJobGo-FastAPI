@@ -15,7 +15,8 @@ FastApi_SeniorJobGo/
 │   │   └── chat_router.py         # 채팅 관련 엔드포인트 (/api/v1/chat/)
 │   ├── services/                  # 비즈니스 로직 및 서비스 레이어
 │   │   ├── __init__.py            # 패키지 초기화 파일
-│   │   ├── vector_store.py        # 벡터 스토어 설정 및 관리 (RAG 검색)
+│   │   ├── vector_store_ingest.py # 벡터 스토어 설정 및 Vector DB 저장
+|   |   ├── vector_store_search.py # 벡터 Search 작업
 │   │   └── conversation.py        # 대화 기록 관리 및 컨텍스트 처리
 │   ├── agents/                    # LangGraph 에이전트 및 워크플로우
 │   │   ├── __init__.py            # 패키지 초기화 파일
