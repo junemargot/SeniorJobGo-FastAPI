@@ -22,12 +22,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # startup
     try:
+        # 벡터 스토어 초기화
         logger.info("벡터 스토어를 초기화합니다. (ingest)")
         ingest = VectorStoreIngest()  # DB 생성/로드 담당
         collection = ingest.setup_vector_store()  # Chroma 객체
         
         logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
         vector_search = VectorStoreSearch(collection)
+        app.state.vector_search = vector_search  # 앱 상태에 저장
 
         logger.info("벡터 스토어 및 검색 객체 초기화 완료")
         
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI):
             model_name="gpt-4o-mini",
             temperature=0.7
         )
+        app.state.llm = llm  # 앱 상태에 저장
         
         app.state.job_advisor_agent = JobAdvisorAgent(
             llm=llm,
@@ -73,11 +76,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 전역 변수
-vector_store = None
-job_advisor_agent = None
-llm = None
-
 def signal_handler(sig, frame):
     """
     시그널 핸들러 - SIGINT(Ctrl+C)나 SIGTERM 시그널을 받으면 실행됨
@@ -91,7 +89,7 @@ def signal_handler(sig, frame):
 async def extract_user_info(request: dict):
     try:
         user_message = request.get("user_message", "")
-        response = llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
+        response = app.state.llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
         info = json.loads(response)
         return info
     except Exception as e:
