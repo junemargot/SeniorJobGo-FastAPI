@@ -2,8 +2,10 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting
+
 from db.database import db
 from bson import ObjectId
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -30,10 +32,16 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         logger.info(f"[ChatRouter] 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 프로필: {chat_request.user_profile}")
         
+        # 응답 시작 시간 기록
+        start_time = time.time()
+        
         job_advisor_agent = request.app.state.job_advisor_agent
         if job_advisor_agent is None:
             logger.error("[ChatRouter] job_advisor_agent가 초기화되지 않음")
-            return {"error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요."}
+            return {
+                "error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요.",
+                "processingTime": 0
+            }
         
         try:
             response = await job_advisor_agent.chat(
@@ -58,6 +66,11 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
 
             db.users.update_one({"_id": ObjectId(_id)}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
             logger.info("[ChatRouter] 응답 생성 완료")
+            
+            # 처리 시간 계산
+            processing_time = time.time() - start_time
+            response["processingTime"] = round(processing_time, 2)
+            
         except Exception as chat_error:
             logger.error(f"[ChatRouter] chat 메서드 실행 중 에러: {str(chat_error)}", exc_info=True)
             raise
@@ -90,5 +103,6 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         return {
             "type": "error",
             "message": "처리 중 오류가 발생했습니다.",
-            "jobPostings": []
+            "jobPostings": [],
+            "processingTime": 0
         } 

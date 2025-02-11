@@ -1,6 +1,6 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from app.utils.constants import DICTIONARY  
 
+from app.utils.constants import DICTIONARY  
 import re
 
 # 사전 변환 규칙을 적용하는 함수 (DICTIONARY 직접 사용)
