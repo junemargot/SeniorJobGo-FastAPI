@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting
-import time
+
+from db.database import db
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,18 @@ conversation_history = {}
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
     try:
+        if db is None:
+            raise Exception("db is None")
+        else:
+            print("db is not None")
+
+        _id = request.cookies.get("sjgid")
+        print(f"request.cookies: {request.cookies}")
+        if _id:
+            user = await db.users.find_one({"_id": ObjectId(_id)})
+        else:
+            raise Exception("쿠키에 사용자 아이디가 없습니다.")
+
         logger.info(f"[ChatRouter] 채팅 요청 시작")
         logger.info(f"[ChatRouter] 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 프로필: {chat_request.user_profile}")
@@ -34,6 +48,23 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 query=chat_request.user_message,
                 user_profile=chat_request.user_profile
             )
+
+            legacy_messages = user["messages"] or []  # None일 경우 빈 배열로 초기화
+            chat_index = len(legacy_messages)
+
+            user_message = {
+                "role": "user",
+                "content": chat_request.user_message,
+                "index": chat_index
+            }
+
+            bot_message = {
+                "role": "bot",
+                "content": response,
+                "index": chat_index + 1
+            }
+
+            db.users.update_one({"_id": ObjectId(_id)}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
             logger.info("[ChatRouter] 응답 생성 완료")
             
             # 처리 시간 계산

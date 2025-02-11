@@ -1,19 +1,22 @@
-fastapi==0.104.1
-# fastapi-middleware-cors==0.8.0
-pydantic==2.4.2
-uvicorn==0.23.2
-langchain==0.0.318
-langchain-chroma==0.1.1
-langchain-community==0.0.7
-langchain-core==0.1.40  # langchain-chroma와 호환되는 버전으로 업데이트
-langchain-openai==0.0.5
-# langchain-text-splitters==0.0.5  # 호환 가능한 버전으로 유지
-langgraph==0.0.16
-openai==0.28.1
-chromadb==0.4.15
-tiktoken==0.5.1
-python-dotenv==1.0.0
-nest_asyncio==1.5.8
-selenium>=4.16.0
-webdriver-manager>=4.0.1
-pydantic>=2.5.0
+
+fastapi[all]
+pydantic
+uvicorn
+langsmith
+langchain
+langchain-chroma
+langchain-community
+langchain-core
+langchain-openai
+langchain-huggingface
+langgraph
+openai
+chromadb
+tiktoken
+python-dotenv
+nest_asyncio
+
+motor
+pymongo
+bcrypt
+

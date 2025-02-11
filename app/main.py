@@ -3,18 +3,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
-from app.routes import chat_router
 from app.agents.job_advisor import JobAdvisorAgent
 from app.services.vector_store_ingest import VectorStoreIngest
 from app.services.vector_store_search import VectorStoreSearch
-from app.utils.embeddings import SentenceTransformerEmbeddings
-
 import signal
 import sys
 import json
 import logging
 from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
+from db import database_initialize, database_shutdown
 
 # 로깅 설정을 더 자세하게
 logging.basicConfig(
@@ -24,23 +22,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 앱 초기화 및 종료 관리
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
     try:
-        # 임베딩 모델 초기화 - 공통으로 사용
-        embedding_model = SentenceTransformerEmbeddings("nlpai-lab/KURE-v1")
-        
+
         logger.info("벡터 스토어를 초기화합니다. (ingest)")
-        ingest = VectorStoreIngest(embedding_model=embedding_model)
-        collection = ingest.setup_vector_store()
+        ingest = VectorStoreIngest()  # DB 생성/로드 담당
+        collection = ingest.setup_vector_store()  # Chroma 객체
         
         logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
-        vector_search = VectorStoreSearch(
-            collection=collection,
-            embedding_model=embedding_model
-        )
+        vector_search = VectorStoreSearch(collection)
+
+        logger.info("벡터 스토어 및 검색 객체 초기화 완료")
+
         
+        # LLM과 에이전트 초기화
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
             model_name="gpt-4o-mini",
@@ -52,15 +50,24 @@ async def lifespan(app: FastAPI):
             llm=llm,
             vector_search=vector_search  # 검색 전용 객체 주입
         )
-        logger.info("초기화 완료")
-        
-        
+
+        logger.info("LLM과 에이전트 초기화 완료")
+
+        # 라우터 등록
+        logger.info("데이터베이스 초기화 및 라우터를 등록합니다.")
+        database_initialize(app)
+        from app.routes import chat_router
+        app.include_router(chat_router.router, prefix="/api/v1")
+        logger.info("데이터베이스 초기화 및 라우터 등록 완료")
+
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
         raise
         
     yield
-    
+    # 데이터베이스 종료
+    database_shutdown()
+
     # shutdown
     logger.info("서버를 종료합니다...")
 
@@ -84,9 +91,6 @@ def signal_handler(sig, frame):
     """
     logger.info(f"\n시그널 {sig} 감지. 서버를 안전하게 종료합니다...")
     sys.exit(0)
-
-# 라우터 등록
-app.include_router(chat_router.router, prefix="/api/v1")
 
 @app.post("/api/v1/extract_info/")
 async def extract_user_info(request: dict):
