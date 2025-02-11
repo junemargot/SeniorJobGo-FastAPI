@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 
@@ -63,13 +62,6 @@ cover/
 *.pot
 
 # Django stuff:
-=======
-# Python
-__pycache__/
-
-# Logs
-logs
->>>>>>> origin/main
 *.log
 local_settings.py
 db.sqlite3

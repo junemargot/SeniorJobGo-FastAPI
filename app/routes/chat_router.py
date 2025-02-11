@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting
 from db.database import db
-
+from bson import ObjectId
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -11,18 +11,19 @@ router = APIRouter()
 # 이전 대화 내용을 저장할 딕셔너리
 conversation_history = {}
 
-class ChatRequest(BaseModel):
-    user_message: str
-    user_profile: dict = None
-    session_id: str = "default_session"
-
-@router.post("/chat/")
-async def chat(request: Request, chat_request: ChatRequest, response: Response):
+@router.post("/chat/", response_model=ChatResponse)
+async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
     try:
         if db is None:
             raise Exception("db is None")
         else:
             print("db is not None")
+
+        _id = request.cookies.get("sjgid")
+        if _id:
+            user = await db.users.find_one({"_id": ObjectId(_id)})
+        else:
+            raise Exception("쿠키에 사용자 아이디가 없습니다.")
 
         logger.info(f"[ChatRouter] 채팅 요청 시작")
         logger.info(f"[ChatRouter] 메시지: {chat_request.user_message}")
@@ -39,22 +40,6 @@ async def chat(request: Request, chat_request: ChatRequest, response: Response):
                 user_profile=chat_request.user_profile
             )
 
-            # 쿠키를 사용해서 사용자 아이디를 가져오려고 하였으나 아직 쿠키를 구현하지 않아서 임시로 테스트 아이디를 사용함.
-            # _id = request.cookies["jobgo_original_id"]
-            # if _id is None:
-            user = await db.users.find_one({"id": "test", "provider": "local"})
-            try: 
-                _id = str(user.inserted_id)
-                print(_id)
-            except:
-                _id = "67a456e80ed048faeffa33dd"
-                print("test 고유 아이디 사용")
-
-            if user is None:
-                raise Exception("user is None")
-            else:
-                print("user: ", user)
-
             legacy_messages = user["messages"] or []  # None일 경우 빈 배열로 초기화
             chat_index = len(legacy_messages)
 
@@ -70,8 +55,7 @@ async def chat(request: Request, chat_request: ChatRequest, response: Response):
                 "index": chat_index + 1
             }
 
-            db.users.update_one({"id": "test", "provider": "local"}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
-            print("메시지 업데이트 완료")
+            db.users.update_one({"_id": ObjectId(_id)}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
             logger.info("[ChatRouter] 응답 생성 완료")
         except Exception as chat_error:
             logger.error(f"[ChatRouter] chat 메서드 실행 중 에러: {str(chat_error)}", exc_info=True)
