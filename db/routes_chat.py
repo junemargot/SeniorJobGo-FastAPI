@@ -10,19 +10,27 @@ from .database import db
 router = APIRouter()
 
 # 채팅 조회 (페이징 처리 추가)
-# - 코드에 대한 설명은 notion에 남겨두었습니다. (기타 참고자료 > MongoDB 페이징 처리)
-#   - https://www.notion.so/Backend-2-MongoDB-1f64eb547b2342fc84eb373391c92c31
-@router.get("/chats/get/{provider}/{user_id}", response_model=List[ChatModel])
+@router.get("/get/{provider}/{user_id}", response_model=List[ChatModel])
 async def get_chats_by_user(user_id: str, provider: str, page: int = Query(1, ge=1), page_size: int = Query(100, ge=1)):
-    skip = (page - 1) * page_size  # 건너뛸 문서 수
-    chats = await db.chats.find({"id": user_id, "provider": provider}) \
-        .skip(skip) \
-        .limit(page_size) \
-        .to_list(page_size)
-    return chats
+    # 우선 대화 기록을 전부 불러오게 하고 페이징 처리를 추후에 구현할 예정
+    user = await db.users.find_one({"id": user_id, "provider": provider})
+    chatList = user["messages"]
+    print(chatList)
+
+    # 기존 코드
+    # - 코드에 대한 설명은 notion에 남겨두었습니다. (기타 참고자료 > MongoDB 페이징 처리)
+    #   - https://www.notion.so/Backend-2-MongoDB-1f64eb547b2342fc84eb373391c92c31
+    # skip = (page - 1) * page_size  # 건너뛸 문서 수
+
+    # chats = await db.chats.find({"id": user_id, "provider": provider}) \
+    #     .skip(skip) \
+    #     .limit(page_size) \
+    #     .to_list(page_size)
+    return chatList
 
 # 대화 추가 메서드
-@router.post("/chats/add/{provider}/{user_id}")
+# 다른 라우터에서 동일한 기능을 구현하고 있으나 추후 참고를 위해 남겨둠
+@router.post("/add/{provider}/{user_id}")
 async def add_message_to_user_chat_list(user_id: str, provider: str, chat: ChatModel):
     user = await db.users.find_one({"id": user_id, "provider": provider})
     
