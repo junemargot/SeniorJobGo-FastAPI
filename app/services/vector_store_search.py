@@ -1,13 +1,15 @@
 import os
 import json
 import logging
-from typing import Optional, List, Tuple, Dict
+
+from typing import Optional, List, Tuple, Dict, Any
+
 
 from langchain_community.chat_models import ChatOpenAI
 from langchain.docstore.document import Document
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
-from app.utils.embeddings import SentenceTransformerEmbeddings  # 변경
+
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +20,13 @@ class VectorStoreSearch:
     - 다단계(AND→OR→단독→동의어→임베딩) 검색 + LLM 재랭킹
     """
 
-    def __init__(self, collection: Chroma, embedding_model: SentenceTransformerEmbeddings):
+
+    def __init__(self, vectorstore: Chroma):
         """
-        collection: 이미 생성/로드된 Chroma 객체
-        embedding_model: 임베딩 모델
+        vectorstore: 이미 생성/로드된 Chroma 객체
         """
-        self.vectorstore = collection
-        self.embedding_model = embedding_model
+        self.vectorstore = vectorstore
+
 
     ############################################################################
     # A) 내부 유틸
@@ -44,8 +46,9 @@ class VectorStoreSearch:
         score = 0.0
         keys_to_check = ["직무", "근무 지역", "연령대"]
         for key in keys_to_check:
-            user_val = str(user_ner.get(key, "")).strip().lower()
-            doc_val = str(doc_ner.get(key, "")).strip().lower()
+
+            user_val = user_ner.get(key, "").strip().lower()
+            doc_val = doc_ner.get(key, "").strip().lower()
             if user_val and doc_val:
                 if user_val in doc_val or doc_val in user_val:
 
@@ -56,74 +59,80 @@ class VectorStoreSearch:
         if not docs:
             return []
 
-        # 사용자 검색 조건
-        user_job = user_ner.get("직무", "").strip().lower()
-        user_region = user_ner.get("지역", "").strip().lower()
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.warning("OPENAI_API_KEY 미설정: LLM 재랭킹 생략")
+            return docs
+
+        llm = ChatOpenAI(
+            openai_api_key=openai_api_key,
+            model_name="gpt-4o-mini",
+            temperature=0.3
+        )
+
+        cond = []
+        if user_ner.get("직무"):
+            cond.append(f"직무={user_ner.get('직무')}")
+        region_val = user_ner.get("근무 지역") or user_ner.get("지역") or user_ner.get("근무지역") or ""
+        if region_val:
+            cond.append(f"근무지역={region_val}")
+        if user_ner.get("연령대"):
+            cond.append(f"연령대={user_ner.get('연령대')}")
+        condition_str = ", ".join(cond) if cond else "조건 없음"
+
+        # 각 문서 스니펫 만들기
+        doc_snippets = []
+        for i, doc in enumerate(docs):
+            title = doc.metadata.get("채용제목", "정보없음")
+            company = doc.metadata.get("회사명", "정보없음")
+            region = doc.metadata.get("근무지역", "정보없음")
+            salary = doc.metadata.get("급여조건", "정보없음")
+            description = doc.page_content[:100].replace("\n", " ")
+            snippet = (
+                f"제목: {title}\n"
+                f"회사명: {company}\n"
+                f"근무지역: {region}\n"
+                f"급여조건: {salary}\n"
+                f"내용: {description}\n"
+            )
+            doc_snippets.append(f"Doc{i+1}:\n{snippet}\n")
+
+        prompt_text = (
+            f"사용자 조건: {condition_str}\n\n"
+            "아래 각 문서가 사용자 조건에 얼마나 부합하는지 0~5점으로 평가해줘.\n"
+            "답변은 JSON 형식: {\"scores\": [5,3,2,...]}.\n\n"
+            + "\n".join(doc_snippets)
+        )
+        logger.info(f"[LLM Re-rank Prompt]\n{prompt_text}")
+
+        resp = llm.invoke(prompt_text)
+        content = resp.content.replace("```json", "").replace("```", "").strip()
+        logger.info(f"[LLM Re-rank Raw] {content}")
+
+        try:
+            score_data = json.loads(content)
+            llm_scores = score_data.get("scores", [])
+        except Exception as ex:
+            logger.warning(f"LLM rerank parse fail: {ex}")
+            llm_scores = [0]*len(docs)
+
+        weight_llm = 0.7
+        weight_manual = 0.3
 
         weighted_scores = []
-        for doc in docs:
-            # 기본 점수
-            base_score = 0
-            
-            # 1. 지역 매칭 점수 (최대 3점)
-            doc_region = doc.metadata.get("근무지역", "").lower()
-            if user_region:
-                if user_region == doc_region:  # 정확히 일치
-                    base_score += 3
-                elif user_region in doc_region:  # 부분 일치
-                    base_score += 2
-                
-            # 2. 직종 매칭 점수 (최대 3점)
-            doc_title = doc.metadata.get("채용제목", "").lower()
-            doc_desc = doc.metadata.get("직무내용", "").lower()
-            if user_job:
-                if user_job in doc_title:  # 제목에 포함
-                    base_score += 3
-                elif user_job in doc_desc:  # 설명에 포함
-                    base_score += 2
-                
-            # 3. LLM 점수 반영 (최대 4점)
+        for i, doc in enumerate(docs):
+            llm_score = llm_scores[i] if i < len(llm_scores) else 0
+            doc_ner_str = doc.metadata.get("LLM_NER", "{}")
             try:
-                llm = ChatOpenAI(
-                    model_name="gpt-4o-mini",
-                    temperature=0.3
-                )
-                
-                prompt = f"""
-                사용자 검색 조건:
-                - 희망 직종: {user_job}
-                - 희망 지역: {user_region}
+                doc_ner = json.loads(doc_ner_str)
+            except:
+                doc_ner = {}
 
-                채용공고:
-                제목: {doc.metadata.get('채용제목', '')}
-                회사: {doc.metadata.get('회사명', '')}
-                지역: {doc.metadata.get('근무지역', '')}
-                직무: {doc.metadata.get('직무내용', '')}
+            manual_score = self._compute_ner_similarity(user_ner, doc_ner)
+            combined = weight_llm*llm_score + weight_manual*manual_score
+            weighted_scores.append( (doc, combined) )
 
-                이 채용공고가 사용자 조건과 얼마나 일치하는지 0-4점으로 평가해주세요.
-                답변 형식: 숫자만 입력 (예: 3)
-                """
-                
-                response = llm.invoke(prompt)
-                llm_score = float(response.content.strip())
-                
-                # 최종 점수 계산 (기본 점수 + LLM 점수)
-                final_score = base_score + llm_score
-                
-            except Exception as e:
-                logger.warning(f"LLM scoring failed: {e}")
-                final_score = base_score
-                
-            weighted_scores.append((doc, final_score))
-            
-            logger.info(
-                f"Ranking - Title: {doc.metadata.get('채용제목', '')}\n"
-                f"Region Match: {user_region in doc_region}\n"
-                f"Job Match: {user_job in doc_title or user_job in doc_desc}\n"
-                f"Final Score: {final_score}"
-            )
 
-        # 점수 기준 내림차순 정렬
         sorted_docs = sorted(weighted_scores, key=lambda x: x[1], reverse=True)
         return [x[0] for x in sorted_docs]
 
@@ -168,31 +177,76 @@ class VectorStoreSearch:
         """
         region, job 에 대해 '$contains' 필터 적용 + similarity_search_with_score
         """
-        filter_condition = {}
+
+        filter_condition = None
         conditions = []
         
         if region:
-            conditions.append({"$contains": region})
+            conditions.append({"근무지역": {"$contains": region}})
         if job:
-            conditions.append({"$contains": job})
+            conditions.append({"채용제목": {"$contains": job}})
 
         if len(conditions) > 1:
-            filter_condition = {"$and": conditions}
-        else:
+            if use_and:
+                filter_condition = {"$and": conditions}
+            else:
+                filter_condition = {"$or": conditions}
+        elif conditions:
             filter_condition = conditions[0]
 
-        results_with_score = self.vectorstore.similarity_search_with_score(
-            query=query,
-            k=top_k*3,
-            where_document=filter_condition
-        )
-        results_with_score.sort(key=lambda x: x[1])  # score(거리) 오름차순
-        selected_docs = [doc for doc, score in results_with_score[:top_k]]
+        try:
+            if filter_condition:
+                results_with_score = self.vectorstore.similarity_search_with_score(
+                    query=query,
+                    k=top_k*3,
+                    filter=filter_condition
+                )
+            else:
+                # 필터 없이 검색
+                results_with_score = self.vectorstore.similarity_search_with_score(
+                    query=query,
+                    k=top_k*3
+                )
+            
+            # 거리(distance) 기준으로 정렬
+            results_with_score.sort(key=lambda x: x[1])
+            selected_docs = [doc for doc, score in results_with_score[:top_k]]
+            
+            # 검색 거리 메타데이터 추가
+            for doc, dist in zip(selected_docs, [score for _, score in results_with_score[:top_k]]):
+                doc.metadata["search_distance"] = dist
+                
+            return selected_docs
+            
+        except Exception as e:
+            logger.error(f"[VectorStore] 검색 중 에러 발생: {str(e)}")
+            return []
 
-        for i, (doc, dist) in enumerate(results_with_score[:top_k]):
-            doc.metadata["search_distance"] = dist
+    def _advanced_param_search(self, query: Dict[str, Any], top_k: int = 20) -> List[Document]:
+        """새로운 고급 파라미터 기반 검색"""
+        try:
+            conditions = self._build_search_conditions(query)
+            if not conditions:
+                results = self.vectorstore.similarity_search(
+                    query=str(query),
+                    k=top_k
+                )
+                return results
+                
+            filter_condition = conditions[0]
+            for condition in conditions[1:]:
+                filter_condition = filter_condition & condition
 
-        return selected_docs
+            results = self.vectorstore.similarity_search_with_score(
+                query=str(query),
+                k=top_k,
+                filter=filter_condition
+            )
+            return [doc for doc, _ in results]
+        except Exception as ex:
+            logger.warning(f"고급 검색 실패: {ex}")
+            return []
+
 
     def search_jobs(self, user_ner: dict, top_k: int = 10) -> List[Document]:
         """
