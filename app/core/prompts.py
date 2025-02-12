@@ -1,6 +1,15 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from app.utils.constants import DICTIONARY
 
+from app.utils.constants import DICTIONARY  
+import re
+
+# 사전 변환 규칙을 적용하는 함수 (DICTIONARY 직접 사용)
+def apply_dictionary_rules(query: str) -> str:
+    """사용자의 질문을 사전(DICTIONARY)에 따라 변환하는 함수"""
+    pattern = re.compile("|".join(map(re.escape, DICTIONARY.keys())))
+    return pattern.sub(lambda match: DICTIONARY[match.group(0)], query)
+
+# 문서 검증 프롬프트
 verify_prompt = PromptTemplate.from_template("""
 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
 
@@ -16,17 +25,17 @@ verify_prompt = PromptTemplate.from_template("""
 답변:
 """)
 
+# 질문 변환 프롬프트 (DICTIONARY 적용됨)
 rewrite_prompt = PromptTemplate.from_template("""
 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
 
-사전: {dictionary}
+원본 질문: {original_query}
 
-질문: {query}
-
-변경된 질문을 출력해주세요:
+변경된 질문: {transformed_query}
 """)
 
+# 채용 공고 추천 프롬프트
 generate_prompt = PromptTemplate.from_template("""
 다음 정보를 바탕으로 구직자에게 도움이 될 만한 답변을 작성해주세요.
 각 채용공고의 지역이 사용자가 찾는 지역과 일치하는지 특히 주의해서 확인해주세요.
@@ -53,7 +62,7 @@ generate_prompt = PromptTemplate.from_template("""
 마지막에는 "더 자세한 정보나 지원 방법이 궁금하시다면 채용공고 번호를 말씀해주세요." 라는 문구를 추가해주세요.
 """)
 
-# 챗봇 페르소나 프롬프트
+# 챗봇 페르소나 설정
 chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상담사입니다. 
 
 페르소나:
@@ -68,21 +77,125 @@ chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상�
 3. 시니어 친화적인 언어 사용
 4. 명확하고 이해하기 쉬운 설명 제공"""
 
-# 기본 대화 프롬프트 템플릿 (CHAT_PROMPT 제거하고 이것만 사용)
+# 기본 대화 프롬프트
 chat_prompt = ChatPromptTemplate.from_messages([
     ("system", chat_persona_prompt),
     ("human", "{query}")  # input -> query로 변경하여 일관성 유지
 ])
 
-# 정보 추출 프롬프트 추가
+# 정보 추출 프롬프트
 EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
-사용자 메시지에서 나이, 희망 근무지역, 희망 직무를 추출해주세요.
-메시지: {query}
+당신은 사용자의 자연스러운 대화에서 구직 관련 정보를 추출하는 전문가입니다.
+
+이전 대화:
+{chat_history}
+
+현재 메시지: {user_query}
+
+위 대화에서 직무, 지역, 연령대 정보를 추출해주세요.
+이전 대화 내용도 참고하여 누락된 정보를 보완해주세요.
+
+아래와 같은 다양한 표현들도 인식해야 합니다:
+- 직무: "일자리", "자리", "일거리", "직장", "취직", "취업" 등의 표현
+- 지역: "여기", "이 근처", "우리 동네", "근처", "가까운" 등의 표현
+- 연령대: "시니어", "노인", "어르신", "중장년" 등의 표현
+
+예시:
+1. "서울에서 경비 일자리 좀 알아보려고요" -> {{"직무": "경비", "지역": "서울", "연령대": ""}}
+2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "근처", "연령대": ""}}
+3. "시니어가 할 만한 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "", "연령대": "시니어"}}
+
+다음 형식의 JSON으로만 응답하세요:
+{{
+    "직무": "추출된 직무 (없으면 빈 문자열)",
+    "지역": "추출된 지역 (없으면 빈 문자열)",
+    "연령대": "추출된 연령대 (없으면 빈 문자열)"
+}}
+
+특별 규칙:
+1. 직무가 명확하지 않더라도 "일자리", "일거리", "자리" 등의 표현이 있으면 빈 문자열로 표시
+2. "여기", "이 근처", "근처" 등의 표현은 "근처"로 통일
+3. 시니어 관련 표현은 모두 "시니어"로 통일
+4. 이전 대화에서 언급된 정보도 활용하여 현재 대화의 맥락을 이해
+""")
+
+# 의도 분류 프롬프트 수정
+CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template("""
+당신은 사용자의 메시지에서 의도를 파악하는 전문가입니다.
+다음 메시지와 대화 이력을 바탕으로 사용자의 의도를 분류해주세요.
+
+이전 대화:
+{chat_history}
+
+현재 메시지: {user_query}
+
+분류해야 할 의도:
+1. job (구직 관련)
+   - "일자리", "직장", "취업", "채용", "자리" 등의 키워드
+   - 특정 직종이나 일자리 검색 요청 (예: "경비", "요양보호사")
+   - 구직 조건(급여, 근무시간 등) 문의
+
+2. training (직업훈련 관련)
+   - "교육", "훈련", "자격증", "배우고", "공부" 등의 키워드
+   - "국비지원", "내일배움카드" 관련 문의
+   - 직업훈련 과정 검색 요청
+
+3. general (일반 대화)
+   - 인사, 감사 등 일상적인 대화
+   - 시스템 사용 방법 문의
+   - 기타 구직/훈련과 관련 없는 대화
+
+아래 형식의 JSON으로만 응답하세요:
+{{
+    "intent": "job|training|general",
+    "confidence": 0.0~1.0,
+    "explanation": "분류 이유 한 줄 설명"
+}}
+
+특별 규칙:
+1. 구직과 훈련이 모두 언급된 경우, 더 강조된 의도를 선택
+2. 의도가 불분명한 경우 confidence를 0.5 이하로 설정
+3. 이전 대화 맥락을 고려하여 현재 메시지의 의도를 파악
+""")
+
+# 재랭킹 프롬프트 추가
+rerank_prompt = PromptTemplate.from_template("""
+사용자의 검색 조건과 각 채용공고를 비교하여 적합도를 평가해주세요.
+
+사용자 조건:
+{user_conditions}
+
+채용공고들:
+{documents}
+
+각 채용공고의 적합도를 0~5점으로 평가하여 JSON 형식으로 반환해주세요:
+{{"scores": [점수1, 점수2, ...]}}
+
+평가 기준:
+- 지역이 정확히 일치: +2점
+- 직무가 정확히 일치: +2점
+- 연령대가 일치: +1점
+- 지역이 인근: +1점
+- 직무가 유사: +1점
+""")
+
+# 훈련정보 관련 프롬프트 추가
+TRAINING_PROMPT = PromptTemplate.from_template("""
+당신은 시니어 구직자를 위한 직업훈련 상담사입니다.
+다음 사용자의 요청에서 훈련과정 검색에 필요한 정보를 추출해주세요.
+
+사용자 요청: {query}
 
 다음 형식의 JSON으로 응답해주세요:
-{
-    "age": "추출된 나이 (없으면 빈 문자열)",
-    "location": "추출된 희망 근무지역 (없으면 빈 문자열)",
-    "jobType": "추출된 희망 직무 (없으면 빈 문자열)"
-}
-""") 
+{{
+    "지역": "추출된 지역명",
+    "과정명": "훈련과정명",
+    "기간": "희망 기간(있는 경우)",
+    "비용": "희망 비용(있는 경우)"
+}}
+
+특별 규칙:
+1. 지역이 명시되지 않은 경우 빈 문자열
+2. 과정명이 명시되지 않은 경우 빈 문자열
+3. 기간과 비용은 선택사항
+""")

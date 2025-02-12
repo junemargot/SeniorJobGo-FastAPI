@@ -1,3 +1,4 @@
+
 fastapi[all]
 pydantic
 uvicorn
@@ -18,3 +19,4 @@ nest_asyncio
 motor
 pymongo
 bcrypt
+

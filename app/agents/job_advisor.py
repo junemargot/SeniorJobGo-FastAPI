@@ -1,21 +1,22 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
-from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt
+from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt, EXTRACT_INFO_PROMPT, CLASSIFY_INTENT_PROMPT
 from app.utils.constants import LOCATIONS, DICTIONARY
 from app.agents.chat_agent import ChatAgent
+from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
 import logging
 import os
 import json
 
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
+
 from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import Runnable
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -44,31 +45,45 @@ class JobAdvisorAgent:
         self.llm = llm
         self.vector_search = vector_search
         self.chat_agent = ChatAgent(llm)
+        self.training_agent = TrainingAdvisorAgent(llm)
         self.workflow = self.setup_workflow()
         
-        # 구직 관련 키워드
-        self.job_keywords = {
-            'position': ['일자리', '직장', '취업', '채용', '구직', '일', '직업', '알바', '아르바이트', '정규직', '계약직'],
-            'salary': ['급여', '월급', '연봉', '시급', '주급', '임금'],
-            'location': ['지역', '근처', '가까운', '동네', '시', '구', '동'],
-            'time': ['시간', '근무시간', '근무요일', '요일', '주말', '평일'],
-            'type': ['경비', '운전', '청소', '요양', '간호', '주방', '조리', '판매', '영업', '사무', '관리', '생산', '제조']
-        }
-
         # 기본 프롬프트 템플릿
         self.chat_template = ChatPromptTemplate.from_messages([
             ("system", "당신은 구직자를 돕는 전문 취업 상담사입니다."),
             ("user", "{query}")
         ])
 
-    def is_job_related(self, query: str) -> bool:
-        """구직 관련 키워드가 포함되어 있는지 확인"""
-        query_lower = query.lower()
-        return any(
-            keyword in query_lower
-            for keywords in self.job_keywords.values()
-            for keyword in keywords
-        )
+    async def classify_intent(self, query: str, chat_history: str = "") -> Tuple[str, float]:
+        """사용자 메시지의 의도를 분류합니다."""
+        try:
+            # 의도 분류 프롬프트 실행
+            chain = CLASSIFY_INTENT_PROMPT | self.llm | StrOutputParser()
+            response = await chain.ainvoke({
+                "user_query": query,
+                "chat_history": chat_history
+            })
+            
+            # JSON 파싱
+            try:
+                result = json.loads(response)
+                intent = result.get("intent", "general")
+                confidence = float(result.get("confidence", 0.5))
+                explanation = result.get("explanation", "")
+                
+                logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}, 설명: {explanation}")
+                
+                return intent, confidence
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"[JobAdvisor] 의도 분류 결과 JSON 파싱 실패: {response}")
+                logger.error(f"파싱 에러: {str(e)}")
+                return "general", 0.5
+            
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 의도 분류 중 에러: {str(e)}")
+            return "general", 0.5
+
     ###############################################################################
     # (A) NER 추출용 함수
     ###############################################################################
@@ -88,52 +103,54 @@ class JobAdvisorAgent:
             temperature=0.0
         )
 
-        prompt = PromptTemplate(
-            input_variables=["user_query"],
-            template=(
-                "사용자 입력: {user_query}\n\n"
-                "아래 항목을 JSON으로 추출 (값이 없으면 빈 문자열로):\n"
-                "- 직무\n"
-                "- 지역\n"
-                "- 연령대\n\n"
-                "예:\n"
-                "json\n"
-                "{{\"직무\": \"요양보호사\", \"지역\": \"서울\", \"연령대\": \"\"}}\n"
-                "\n"
-            )
-        )
-        return prompt | llm
+        return EXTRACT_INFO_PROMPT | llm
 
-    def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str]) -> Dict[str, str]:
+
+    def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str], chat_history: str = "") -> Dict[str, str]:
         """
         (1) 사용자 입력 NER 추출
         (1-1) NER 데이터가 없거나 누락된 항목은 user_profile (age, location, jobType)로 보완
         """
-        # 1) 사용자 입력 NER
-        ner_chain = self.get_user_ner_runnable()
-        ner_res = ner_chain.invoke({"user_query": user_message})
-        ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
-        cleaned = ner_str.replace("```json", "").replace("```", "").strip()
 
         try:
-            user_ner = json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
-            user_ner = {}
+            # 1) 사용자 입력 NER
+            ner_chain = self.get_user_ner_runnable()
+            ner_res = ner_chain.invoke({
+                "user_query": user_message,
+                "chat_history": chat_history
+            })
+            ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
+            cleaned = ner_str.replace("```json", "").replace("```", "").strip()
 
-        logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
+            try:
+                user_ner = json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
+                user_ner = {"직무": "", "지역": "", "연령대": ""}
 
-        # 1-1) 프로필 보완
-        # user_profile: {"age":"", "location":"", "jobType":""}
-        if not user_ner.get("직무") and user_profile.get("jobType"):
-            user_ner["직무"] = user_profile["jobType"]
-        if not user_ner.get("지역") and user_profile.get("location"):
-            user_ner["지역"] = user_profile["location"]
-        if not user_ner.get("연령대") and user_profile.get("age"):
-            user_ner["연령대"] = user_profile["age"]
+            logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
 
-        logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
-        return user_ner
+            # 1-1) 프로필 보완
+            # user_profile: {"age":"", "location":"", "jobType":""}
+            if not user_ner.get("직무") and user_profile.get("jobType"):
+                user_ner["직무"] = user_profile["jobType"]
+            if not user_ner.get("지역") and user_profile.get("location"):
+                user_ner["지역"] = user_profile["location"]
+            if not user_ner.get("연령대") and user_profile.get("age"):
+                user_ner["연령대"] = user_profile["age"]
+
+            logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
+            return user_ner
+            
+        except Exception as e:
+            logger.error(f"[JobAdvisor] NER 추출 중 에러 발생: {str(e)}")
+            # 에러 발생 시 기본값 반환
+            return {
+                "직무": user_profile.get("jobType", ""),
+                "지역": user_profile.get("location", ""),
+                "연령대": user_profile.get("age", "")
+            }
+
 
     ###############################################################################
     # (B) 일반 대화/채용정보 검색 라우팅
@@ -144,7 +161,7 @@ class JobAdvisorAgent:
 
         # (1) 일반 대화 체크
         if not self.is_job_related(query):
-            logger.info("[JobAdvisor] 일반 대화로 판단")
+            # 일상 대화 처리 -> LLM으로 전달 -> 구직 관련 대화 유도
             response = self.chat_agent.chat(query)
             return {
                 # ChatResponse 호환 형태
@@ -244,26 +261,13 @@ class JobAdvisorAgent:
             "answers": state.get('answers', [])
         }
 
-    def rewrite(self, state: AgentState):
-        try:
-            logger.info("[JobAdvisor] rewrite 시작")
-            query = state['query']
-            
-            # 직접 텍스트 변환 수행
-            rewritten_query = query
-            for old_word, new_word in DICTIONARY.items():
-                rewritten_query = rewritten_query.replace(old_word, new_word)
-            
-            if rewritten_query != query:
-                logger.info(f"[JobAdvisor] 쿼리 변경: {query} -> {rewritten_query}")
-            else:
-                logger.info("[JobAdvisor] 변경 필요 없음")
-            
-            return {"query": rewritten_query}
-            
-        except Exception as e:
-            logger.error(f"[JobAdvisor] rewrite 에러: {str(e)}", exc_info=True)
-            return {"query": state['query']}  # 에러 시 원본 쿼리 반환
+    def rewrite(self, state: AgentState) -> dict:
+        query = state['query']
+        
+        rewrite_chain = rewrite_prompt | self.llm | StrOutputParser()
+        response = rewrite_chain.invoke({'query': query})
+        
+        return {'query': response}
 
     def generate(self, state: AgentState) -> dict:
         query = state['query']
@@ -333,49 +337,82 @@ class JobAdvisorAgent:
         return workflow.compile()
 
 
-    async def chat(self, query: str, user_profile: dict = None) -> dict:
-        """
-        일반 대화 vs. 채용정보 검색:
-        - 최대 5건만 jobPostings에 담음
-        - RAG 프롬프트 결과(문자열)와 함께 message에 통합
-        - 최종적으로 ChatResponse와 호환되는 dict 반환
-        """
+    async def chat(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
+        """사용자 메시지에 대한 응답을 생성합니다."""
+        logger.info("=" * 50)
+        logger.info(f"[JobAdvisor] chat 메서드 시작")
+        logger.info(f"[JobAdvisor] 입력 쿼리: {query}")
+        logger.info(f"[JobAdvisor] 사용자 프로필: {user_profile}")
+        logger.info(f"[JobAdvisor] 대화 이력 수: {len(chat_history) if chat_history else 0}")
+        logger.info(f"[JobAdvisor] 대화 이력 타입: {type(chat_history)}")
+        if chat_history:
+            logger.info(f"[JobAdvisor] 대화 이력 첫 번째 항목: {chat_history[0] if chat_history else None}")
+
         try:
-            logger.info(f"[JobAdvisor] chat 시작 - 쿼리: {query}")
-            logger.info(f"[JobAdvisor] 사용자 프로필: {user_profile}")
+            # 대화 이력 포맷팅
+            logger.info("[JobAdvisor] 대화 이력 포맷팅 시작")
+            formatted_history = ""
+            if chat_history and isinstance(chat_history, str):
+                logger.info("[JobAdvisor] 대화 이력이 문자열 형태")
+                formatted_history = chat_history
+            elif chat_history and isinstance(chat_history, list):
+                logger.info("[JobAdvisor] 대화 이력이 리스트 형태")
+                for msg in chat_history[-5:]:  # 최근 5개 메시지만 사용
+                    logger.info(f"[JobAdvisor] 메시지 처리: {msg}")
+                    if isinstance(msg, dict):
+                        role = "사용자" if msg.get("role") == "user" else "시스템"
+                        content = msg.get("content", "")
+                        if isinstance(content, dict):
+                            content = content.get("message", "")
+                        formatted_history += f"{role}: {content}\n"
+            logger.info(f"[JobAdvisor] 포맷팅된 대화 이력: {formatted_history}")
+            
+            # 의도 분류 (대화 이력 포함)
+            logger.info("[JobAdvisor] 의도 분류 시작")
+            intent, confidence = await self.classify_intent(query, formatted_history)
+            logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}")
+            
+            # 높은 확신도의 의도에 따라 처리
+            if confidence > 0.6:
+                if intent == "job":
+                    logger.info("[JobAdvisor] 채용정보 검색 처리 시작")
+                    return await self.handle_job_query(query, user_profile, formatted_history)
+                elif intent == "training":
+                    logger.info("[JobAdvisor] 훈련정보 검색 처리 시작")
+                    return await self.handle_training_query(query, user_profile)
+            
+            # 낮은 확신도 또는 일반 대화인 경우
+            logger.info("[JobAdvisor] 일반 대화 처리 시작")
+            return await self.handle_general_conversation(query, formatted_history)
+            
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 채팅 처리 중 에러: {str(e)}", exc_info=True)
+            return {
+                "message": "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다.",
+                "type": "error"
+            }
 
-            user_profile = user_profile or {}
+    async def handle_job_query(self, query: str, user_profile: Dict, chat_history: str = "") -> Dict:
+        """채용정보 검색 처리"""
+        logger.info("[JobAdvisor] 채용정보 검색 시작")
+        try:
+            # 대화 이력을 포함하여 NER 추출 (async 제거)
+            user_ner = self._extract_user_ner(query, user_profile, chat_history)
+            logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
 
-            # (A) 일반 대화 판단
-            if not self.is_job_related(query):
-                logger.info("[JobAdvisor] 일반 대화로 판단")
-                # 일반 대화 시, 간단 메시지만 반환
+            if not any(user_ner.values()):
+                logger.info("[JobAdvisor] NER 추출 실패")
                 return {
-                    "message": "구직 관련 문의가 아니네요. 어떤 일자리를 찾으시는지 말씀해주시면 도와드리겠습니다. 😊",
+                    "message": "죄송합니다. 어떤 종류의 일자리를 찾으시는지 조금 더 자세히 말씀해 주시겠어요?",
                     "jobPostings": [],
                     "type": "info",
                     "user_profile": user_profile
                 }
 
-            # (B) 채용정보 검색
-            logger.info("[JobAdvisor] 채용정보 검색 시작")
-            user_ner = self._extract_user_ner(query, user_profile)
-
-            try:
-                results = self.vector_search.search_jobs(user_ner, top_k=10)
-                logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
-            except Exception as search_error:
-                logger.error(f"[JobAdvisor] 검색 중 에러 발생: {str(search_error)}", exc_info=True)
-                # 오류 시 빈 jobPostings
-                return {
-                    "message": "죄송합니다. 검색 중 오류가 발생했습니다.",
-                    "jobPostings": [],
-                    "type": "error",
-                    "user_profile": user_profile
-                }
+            results = self.vector_search.search_jobs(user_ner=user_ner, top_k=10)
+            logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
 
             if not results:
-                # 결과 없음
                 return {
                     "message": "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
                     "jobPostings": [],
@@ -383,57 +420,64 @@ class JobAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            # (C) 최대 5건 추출
             top_docs = results[:5]
-
-            # (D) Document -> JobPosting 변환
             job_postings = []
+            
             for i, doc in enumerate(top_docs, start=1):
-                md = doc.metadata
-                job_postings.append({
-                    "id": md.get("채용공고ID", "no_id"),
-                    "location": md.get("근무지역", ""),
-                    "company": md.get("회사명", ""),
-                    "title": md.get("채용제목", ""),
-                    "salary": md.get("급여조건", ""),
-                    "workingHours": md.get("근무시간", "정보없음"),
-                    "description": md.get("상세정보", doc.page_content[:300]),
-                    "rank": i
-                })
+                try:
+                    md = doc.metadata
+                    job_postings.append({
+                        "id": md.get("채용공고ID", f"no_id_{i}"),
+                        "location": md.get("근무지역", "위치 정보 없음"),
+                        "company": md.get("회사명", "회사명 없음"),
+                        "title": md.get("채용제목", "제목 없음"),
+                        "salary": md.get("급여조건", "급여 정보 없음"),
+                        "workingHours": md.get("근무시간", "근무시간 정보 없음"),
+                        "description": md.get("상세정보", doc.page_content[:300]),
+                        "rank": i
+                    })
+                except Exception as doc_error:
+                    logger.error(f"[JobAdvisor] 문서 {i} 처리 중 에러: {str(doc_error)}")
+                    continue
 
-            # # (E) RAG: generate_prompt로 카드 형태 답변 생성
-            # logger.info("[JobAdvisor] RAG Chain 실행")
-            # context_str = "\n\n".join([
-            #     f"제목: {doc.metadata.get('채용제목', '')}\n"
-            #     f"회사: {doc.metadata.get('회사명', '')}\n"
-            #     f"지역: {doc.metadata.get('근무지역', '')}\n"
-            #     f"급여: {doc.metadata.get('급여조건', '')}\n"
-            #     f"상세내용: {doc.page_content}"
-            #     for doc in top_docs
-            # ])
-            # rag_chain = generate_prompt | self.llm | StrOutputParser()
-            # rag_response = rag_chain.invoke({"question": query, "context": context_str})
-
-            if job_postings:
-                msg = f"'{query}' 검색 결과, 상위 {len(job_postings)}건을 반환합니다."
-                res_type = "jobPosting"
-            else:
-                msg = "조건에 맞는 채용공고를 찾지 못했습니다."
-                res_type = "info"
-
-            # (F) 최종 메시지: RAG 결과 문자열
             return {
-                "message": msg,
+                "message": f"'{query}' 검색 결과, {len(job_postings)}건의 채용정보를 찾았습니다.",
                 "jobPostings": job_postings,
-                "type": res_type,
+                "type": "jobPosting",
                 "user_profile": user_profile
-        }
+            }
 
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 전체 처리 중 에러 발생: {str(e)}", exc_info=True)
+        except Exception as search_error:
+            logger.error("[JobAdvisor] 검색 중 에러 발생", exc_info=True)
             return {
-                "message": "죄송합니다. 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "message": "죄송합니다. 채용정보 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
                 "jobPostings": [],
                 "type": "error",
                 "user_profile": user_profile
             }
+
+    async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
+        """훈련정보 검색 처리"""
+        logger.info("[JobAdvisor] 훈련정보 검색 시작")
+        try:
+            # TrainingAdvisorAgent로 위임
+            return await self.training_agent.search_training(query, user_profile)
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 훈련정보 검색 중 에러: {str(e)}", exc_info=True)
+            return {
+                "message": "죄송합니다. 훈련정보 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "trainingCourses": [],
+                "type": "error",
+                "user_profile": user_profile
+            }
+
+    async def handle_general_conversation(self, query: str, chat_history: str = "") -> Dict:
+        """일반 대화 처리"""
+        logger.info("[JobAdvisor] 일반 대화로 판단")
+        chat_response = await self.chat_agent.chat(query, chat_history)
+        return {
+            "message": chat_response,
+            "jobPostings": [],
+            "type": "info",
+            "user_profile": {}
+        }

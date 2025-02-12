@@ -14,6 +14,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 # 1) 임베딩 클래스
 ###############################################################################
+
 class SentenceTransformerEmbeddings:
     def __init__(self, model_name: str):
         self.model = SentenceTransformer(model_name)
@@ -35,6 +37,7 @@ class SentenceTransformerEmbeddings:
         return embedding.tolist()  # NumPy 배열을 Python 리스트로 변환
 
 
+
 ###############################################################################
 # 2) VectorStoreIngest: DB 생성(빌드) 및 설정
 ###############################################################################
@@ -45,6 +48,7 @@ class VectorStoreIngest:
     - setup_vectorstore()로 DB 생성 또는 로드
     """
 
+
     def __init__(self, persist_directory: Optional[str] = None):
         self.embedding_model = SentenceTransformerEmbeddings("nlpai-lab/KURE-v1")
 
@@ -53,6 +57,7 @@ class VectorStoreIngest:
             self.persist_directory = str(Path(__file__).parent.parent.parent / "jobs_collection")
         else:
             self.persist_directory = persist_directory
+
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=100,
