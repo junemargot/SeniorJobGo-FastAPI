@@ -134,7 +134,16 @@ class TrainingAdvisorAgent:
             })
         return formatted_courses
 
-    async def search_training(self, query: str, user_profile: Optional[Dict] = None) -> Dict:
+    def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
+        """훈련과정 목록에서 중복된 과정을 제거합니다."""
+        unique_courses = {}
+        for course in courses:
+            course_id = course.get('id')
+            if course_id not in unique_courses:
+                unique_courses[course_id] = course
+        return list(unique_courses.values())
+
+    async def search_training_courses(self, query: str, user_profile: Optional[Dict] = None) -> Dict:
         """훈련과정 검색 메인 메서드"""
         try:
             # 1. NER 추출
@@ -155,8 +164,9 @@ class TrainingAdvisorAgent:
                     "user_profile": user_profile
                 }
             
-            # 4. 결과 포맷팅
+            # 4. 결과 포맷팅 및 중복 제거
             training_courses = self._format_training_courses(courses)
+            training_courses = self._deduplicate_training_courses(training_courses)
             
             # 5. 응답 메시지 생성
             location = user_ner.get("지역", "")

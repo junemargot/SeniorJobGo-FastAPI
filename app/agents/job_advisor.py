@@ -438,18 +438,38 @@ class JobAdvisorAgent:
                 "user_profile": user_profile
             }
 
+    def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
+        """훈련과정 목록에서 중복된 과정을 제거합니다."""
+        unique_courses = {}
+        for course in courses:
+            course_id = course.get('id')
+            if course_id not in unique_courses:
+                unique_courses[course_id] = course
+        return list(unique_courses.values())
+
     async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
-        """훈련정보 검색 처리"""
-        logger.info("[JobAdvisor] 훈련정보 검색 시작")
+        """훈련과정 관련 질의 처리"""
         try:
-            # TrainingAdvisorAgent로 위임
-            return await self.training_agent.search_training(query, user_profile)
+            # 훈련과정 검색
+            training_advisor = TrainingAdvisorAgent(self.llm)
+            training_results = await training_advisor.search_training_courses(query, user_profile)
+            
+            # 중복 제거
+            if training_results.get('trainingCourses'):
+                training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
+                training_results['message'] = training_results['message'].replace(
+                    str(len(training_results['trainingCourses']) + 1),  # 원래 개수
+                    str(len(training_results['trainingCourses']))  # 중복 제거 후 개수
+                )
+            
+            return training_results
+
         except Exception as e:
-            logger.error(f"[JobAdvisor] 훈련정보 검색 중 에러: {str(e)}", exc_info=True)
+            logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
             return {
-                "message": "죄송합니다. 훈련정보 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
                 "trainingCourses": [],
-                "type": "error",
+                "type": "training",
                 "user_profile": user_profile
             }
 
