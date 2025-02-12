@@ -8,6 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from work24.training_collector import TrainingCollector
 from app.core.prompts import EXTRACT_INFO_PROMPT
+from app.services.document_filter import DocumentFilter
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class TrainingAdvisorAgent:
     def __init__(self, llm):
         self.llm = llm
         self.collector = TrainingCollector()
+        self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
         
         # 지역 코드 매핑
         self.area_codes = {
@@ -76,7 +78,7 @@ class TrainingAdvisorAgent:
             "srchTraArea2": "",      # 상세 지역
             "srchTraStDt": "",       # 시작일
             "srchTraEndDt": "",      # 종료일
-            "pageSize": 20,
+            "pageSize": 50,          # 더 많은 결과를 가져와서 필터링
             "outType": "1",
             "sort": "DESC",
             "sortCol": "TRNG_BGDE"
@@ -113,25 +115,44 @@ class TrainingAdvisorAgent:
 
         return search_params
 
-    def _format_training_courses(self, courses: List[Dict], max_count: int = 5) -> List[Dict]:
+    def _format_training_courses(self, courses: List[Dict], max_count: int = 5, is_low_cost: bool = False) -> List[Dict]:
         """훈련과정 정보 포맷팅"""
         formatted_courses = []
-        for course in courses[:max_count]:
-            formatted_courses.append({
-                "id": course.get("trprId", ""),
-                "title": course.get("title", ""),
-                "institute": course.get("subTitle", ""),
-                "location": course.get("address", ""),
-                "period": f"{course.get('traStartDate', '')} ~ {course.get('traEndDate', '')}",
-                "startDate": course.get("traStartDate", ""),
-                "endDate": course.get("traEndDate", ""),
-                "cost": f"{int(course.get('courseMan', 0)):,}원",
-                "description": course.get("contents", ""),
-                "target": course.get("trainTarget", ""),
-                "yardMan": course.get("yardMan", ""),
-                "titleLink": course.get("titleLink", ""),
-                "telNo": course.get("telNo", "")
-            })
+        for course in courses:
+            try:
+                cost = int(course.get("courseMan", "0").replace(",", ""))
+                formatted_course = {
+                    "id": course.get("trprId", ""),
+                    "title": course.get("title", ""),
+                    "institute": course.get("subTitle", ""),
+                    "location": course.get("address", ""),
+                    "period": f"{course.get('traStartDate', '')} ~ {course.get('traEndDate', '')}",
+                    "startDate": course.get("traStartDate", ""),
+                    "endDate": course.get("traEndDate", ""),
+                    "cost": f"{cost:,}원",
+                    "cost_value": cost,  # 정렬을 위해 추가
+                    "description": course.get("contents", ""),
+                    "target": course.get("trainTarget", ""),
+                    "yardMan": course.get("yardMan", ""),
+                    "titleLink": course.get("titleLink", ""),
+                    "telNo": course.get("telNo", "")
+                }
+                formatted_courses.append(formatted_course)
+            except Exception as e:
+                logger.error(f"과정 포맷팅 중 오류: {str(e)}")
+                continue
+
+        # 비용순으로 정렬
+        if is_low_cost:
+            formatted_courses.sort(key=lambda x: x["cost_value"])
+            
+        # 상위 과정만 선택
+        formatted_courses = formatted_courses[:max_count]
+        
+        # cost_value 필드 제거
+        for course in formatted_courses:
+            course.pop("cost_value", None)
+            
         return formatted_courses
 
     def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
@@ -143,9 +164,19 @@ class TrainingAdvisorAgent:
                 unique_courses[course_id] = course
         return list(unique_courses.values())
 
-    async def search_training_courses(self, query: str, user_profile: Optional[Dict] = None) -> Dict:
-        """훈련과정 검색 메인 메서드"""
+    async def search_training_courses(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
+        """훈련과정 검색 처리"""
         try:
+            # 저렴한 과정 요청 여부 확인
+            is_low_cost = any(keyword in query for keyword in ["저렴한", "싼", "무료", "비용", "적은", "낮은"])
+            
+            # 제외 의도 확인
+            if self.document_filter.check_exclusion_intent(query, chat_history):
+                logger.info("[TrainingAdvisor] 제외 의도 감지됨")
+                previous_results = user_profile.get('previous_training_results', [])
+                if previous_results:
+                    self.document_filter.add_excluded_documents(previous_results)
+
             # 1. NER 추출
             user_ner = self._extract_ner(query, user_profile)
             
@@ -155,43 +186,63 @@ class TrainingAdvisorAgent:
             
             # 3. API 호출
             courses = self.collector._fetch_training_list("tomorrow", search_params)
-            
+            logger.info(f"[TrainingAdvisor] 검색 결과 수: {len(courses) if courses else 0}")
+
             if not courses:
                 return {
-                    "message": "현재 조건에 맞는 훈련과정이 없습니다. 다른 조건으로 찾아보시겠어요?\n예시: '요양보호사 과정', '조리사 교육', 'IT 교육' 등",
+                    "message": "죄송합니다. 현재 조건에 맞는 훈련과정을 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
                     "trainingCourses": [],
-                    "type": "info",
+                    "type": "training",
                     "user_profile": user_profile
                 }
-            
-            # 4. 결과 포맷팅 및 중복 제거
-            training_courses = self._format_training_courses(courses)
+
+            # 4. 결과 포맷팅 (비용순 정렬 적용)
+            training_courses = self._format_training_courses(courses, is_low_cost=is_low_cost)
             training_courses = self._deduplicate_training_courses(training_courses)
             
-            # 5. 응답 메시지 생성
+            # 5. 필터링 적용
+            filtered_courses = self.document_filter.filter_documents(training_courses)
+            logger.info(f"[TrainingAdvisor] 필터링 후 결과 수: {len(filtered_courses)}")
+
+            if not filtered_courses:
+                return {
+                    "message": "죄송합니다. 이전과 다른 새로운 훈련과정을 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
+                    "trainingCourses": [],
+                    "type": "training",
+                    "user_profile": user_profile
+                }
+
+            # 6. 상위 5개만 선택
+            top_courses = filtered_courses[:5]
+
+            # 7. 현재 결과를 user_profile에 저장
+            if user_profile is not None:
+                user_profile['previous_training_results'] = top_courses
+
+            # 8. 응답 메시지 생성
             location = user_ner.get("지역", "")
             job = user_ner.get("직무", "")
             
-            if location and job:
-                message = f"{location}지역의 '{job}' 관련 훈련과정을 {len(training_courses)}개 찾았습니다."
-            elif location:
-                message = f"{location}지역의 훈련과정을 {len(training_courses)}개 찾았습니다."
-            elif job:
-                message = f"'{job}' 관련 훈련과정을 {len(training_courses)}개 찾았습니다."
-            else:
-                message = f"검색 결과 {len(training_courses)}개의 훈련과정을 찾았습니다."
+            message_parts = []
+            if location:
+                message_parts.append(f"{location}지역")
+            if job:
+                message_parts.append(f"'{job}' 관련")
+            
+            cost_message = "비용이 낮은 순으로" if is_low_cost else ""
+            message = f"{' '.join(message_parts)} 훈련과정을 {cost_message} {len(top_courses)}개 찾았습니다."
 
             return {
-                "message": message,
-                "trainingCourses": training_courses,
+                "message": message.strip(),
+                "trainingCourses": top_courses,
                 "type": "training",
                 "user_profile": user_profile
             }
 
         except Exception as e:
-            logger.error(f"[TrainingAdvisor] 검색 중 에러: {str(e)}", exc_info=True)
+            logger.error(f"[TrainingAdvisor] 훈련과정 검색 중 오류: {str(e)}", exc_info=True)
             return {
-                "message": "죄송합니다. 훈련정보 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
                 "trainingCourses": [],
                 "type": "error",
                 "user_profile": user_profile

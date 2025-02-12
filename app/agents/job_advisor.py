@@ -8,6 +8,7 @@ from app.utils.constants import LOCATIONS, DICTIONARY
 from app.agents.chat_agent import ChatAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
+from app.services.document_filter import DocumentFilter
 import logging
 import os
 import json
@@ -45,8 +46,9 @@ class JobAdvisorAgent:
         self.llm = llm
         self.vector_search = vector_search
         self.chat_agent = ChatAgent(llm)
-        self.training_agent = TrainingAdvisorAgent(llm)
+        self.training_agent = TrainingAdvisorAgent(llm)  # 한 번만 생성
         self.workflow = self.setup_workflow()
+        self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
         
         # 기본 프롬프트 템플릿
         self.chat_template = ChatPromptTemplate.from_messages([
@@ -336,10 +338,13 @@ class JobAdvisorAgent:
             formatted_history = ""
             if chat_history and isinstance(chat_history, str):
                 logger.info("[JobAdvisor] 대화 이력이 문자열 형태")
-                formatted_history = chat_history
+                # 문자열을 줄바꿈으로 분리하고 최근 3개만 선택
+                history_lines = chat_history.split('\n')
+                recent_history = history_lines[-6:] if len(history_lines) > 6 else history_lines  # 사용자+시스템 메시지 쌍이므로 6줄 (3개 대화)
+                formatted_history = '\n'.join(recent_history)
             elif chat_history and isinstance(chat_history, list):
                 logger.info("[JobAdvisor] 대화 이력이 리스트 형태")
-                for msg in chat_history[-5:]:  # 최근 5개 메시지만 사용
+                for msg in chat_history[-3:]:  # 최근 3개 메시지만 사용
                     logger.info(f"[JobAdvisor] 메시지 처리: {msg}")
                     if isinstance(msg, dict):
                         role = "사용자" if msg.get("role") == "user" else "시스템"
@@ -378,7 +383,15 @@ class JobAdvisorAgent:
         """채용정보 검색 처리"""
         logger.info("[JobAdvisor] 채용정보 검색 시작")
         try:
-            # 대화 이력을 포함하여 NER 추출 (async 제거)
+            # 제외 의도 확인
+            if self.document_filter.check_exclusion_intent(query, chat_history):
+                logger.info("[JobAdvisor] 제외 의도 감지됨")
+                # 이전 결과가 있으면 제외 목록에 추가
+                previous_results = user_profile.get('previous_results', [])
+                if previous_results:
+                    self.document_filter.add_excluded_documents(previous_results)
+
+            # 대화 이력을 포함하여 NER 추출
             user_ner = self._extract_user_ner(query, user_profile, chat_history)
             logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
 
@@ -391,10 +404,15 @@ class JobAdvisorAgent:
                     "user_profile": user_profile
                 }
 
+            # 검색 결과 가져오기
             results = self.vector_search.search_jobs(user_ner=user_ner, top_k=10)
             logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
 
-            if not results:
+            # 필터링 적용
+            filtered_results = self.document_filter.filter_documents(results)
+            logger.info(f"[JobAdvisor] 필터링 후 결과 수: {len(filtered_results)}")
+
+            if not filtered_results:
                 return {
                     "message": "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
                     "jobPostings": [],
@@ -402,7 +420,8 @@ class JobAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            top_docs = results[:5]
+            # 상위 5개만 선택
+            top_docs = filtered_results[:5]
             job_postings = []
             
             for i, doc in enumerate(top_docs, start=1):
@@ -421,6 +440,9 @@ class JobAdvisorAgent:
                 except Exception as doc_error:
                     logger.error(f"[JobAdvisor] 문서 {i} 처리 중 에러: {str(doc_error)}")
                     continue
+
+            # 현재 결과를 user_profile에 저장
+            user_profile['previous_results'] = job_postings
 
             return {
                 "message": f"'{query}' 검색 결과, {len(job_postings)}건의 채용정보를 찾았습니다.",
@@ -450,9 +472,8 @@ class JobAdvisorAgent:
     async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
         """훈련과정 관련 질의 처리"""
         try:
-            # 훈련과정 검색
-            training_advisor = TrainingAdvisorAgent(self.llm)
-            training_results = await training_advisor.search_training_courses(query, user_profile)
+            # 기존 training_agent 인스턴스 재사용
+            training_results = await self.training_agent.search_training_courses(query, user_profile)
             
             # 중복 제거
             if training_results.get('trainingCourses'):
