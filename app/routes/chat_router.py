@@ -46,7 +46,7 @@ async def chat(
         logger.info("[ChatRouter] 새로운 채팅 요청 시작")
         logger.info(f"[ChatRouter] 요청 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")
-
+        
         # DB 체크
         if db is None:
             logger.error("[ChatRouter] DB 연결 없음")
@@ -106,7 +106,15 @@ async def chat(
             
         logger.info(f"[ChatRouter] 관련 대화 이력 수: {len(relevant_history)}")
         logger.info(f"[ChatRouter] 포맷팅된 대화 이력: {formatted_history}")
-
+        
+        # 이전 검색 결과가 있는지 확인
+        prev_message = formatted_history.split("\n")[-2] if formatted_history else ""
+        if "관련 훈련과정을" in prev_message and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
+            # 이전 검색 키워드 추출
+            keyword = prev_message.split("'")[1] if "'" in prev_message else ""
+            if keyword:
+                chat_request.user_message = f"{keyword} {chat_request.user_message}"
+        
         logger.info("[ChatRouter] JobAdvisorAgent.chat 호출 시작")
         try:
             response = await job_advisor_agent.chat(
@@ -116,11 +124,29 @@ async def chat(
             )
             logger.info("[ChatRouter] JobAdvisorAgent.chat 응답 성공")
             logger.info(f"[ChatRouter] 응답 내용: {response}")
-
+            
         except Exception as chat_error:
             logger.error("[ChatRouter] JobAdvisorAgent.chat 실행 중 에러", exc_info=True)
             raise chat_error
-
+        
+        # 가격 필터링이 필요한 경우
+        if response.get("type") == "training" and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
+            courses = response.get("trainingCourses", [])
+            filtered_courses = []
+            for course in courses:
+                try:
+                    cost = int(course.get("cost", "0").replace(",", "").replace("원", ""))
+                    if cost <= 300000:  # 30만원 이하
+                        filtered_courses.append(course)
+                except ValueError:
+                    continue
+            
+            if filtered_courses:
+                response["trainingCourses"] = filtered_courses
+                response["message"] = f"30만원 이하의 저렴한 훈련과정 {len(filtered_courses)}개를 찾았습니다."
+            else:
+                response["message"] = "죄송합니다. 조건에 맞는 저렴한 훈련과정을 찾지 못했습니다."
+        
         # 메시지 저장
         try:
             chat_index = len(chat_history)
@@ -142,7 +168,7 @@ async def chat(
                 {"$push": {"messages": {"$each": [user_message, bot_message]}}}
             )
             logger.info("[ChatRouter] 메시지 저장 완료")
-
+            
         except Exception as db_error:
             logger.error("[ChatRouter] 메시지 저장 중 에러", exc_info=True)
             # 메시지 저장 실패는 치명적이지 않으므로 계속 진행
@@ -192,7 +218,7 @@ async def chat(
             type=response.get("type", "info"),
             user_profile=response.get("user_profile", {})
         )
-
+        
         logger.info("[ChatRouter] 응답 생성 완료")
         logger.info("="*50)
         
@@ -204,7 +230,7 @@ async def chat(
             type="error",
             message="처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
             jobPostings=[],
-            trainingCourses=[],  # 추가
+            trainingCourses=[],
             user_profile={}
         )
         return error_response
