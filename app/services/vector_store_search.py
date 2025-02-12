@@ -1,12 +1,15 @@
 import os
 import json
 import logging
-from typing import Optional, List, Tuple, Dict
 
-from langchain_community.chat_models import ChatOpenAI
-from langchain.docstore.document import Document
+from typing import Optional, List, Tuple, Dict, Any
+
+
+from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
+
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +20,17 @@ class VectorStoreSearch:
     - 다단계(AND→OR→단독→동의어→임베딩) 검색 + LLM 재랭킹
     """
 
+
     def __init__(self, vectorstore: Chroma):
         """
         vectorstore: 이미 생성/로드된 Chroma 객체
         """
         self.vectorstore = vectorstore
+        self.llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.0
+        )
+
 
     ############################################################################
     # A) 내부 유틸
@@ -41,10 +50,12 @@ class VectorStoreSearch:
         score = 0.0
         keys_to_check = ["직무", "근무 지역", "연령대"]
         for key in keys_to_check:
+
             user_val = user_ner.get(key, "").strip().lower()
             doc_val = doc_ner.get(key, "").strip().lower()
             if user_val and doc_val:
                 if user_val in doc_val or doc_val in user_val:
+
                     score += 1.0
         return score
 
@@ -125,6 +136,7 @@ class VectorStoreSearch:
             combined = weight_llm*llm_score + weight_manual*manual_score
             weighted_scores.append( (doc, combined) )
 
+
         sorted_docs = sorted(weighted_scores, key=lambda x: x[1], reverse=True)
         return [x[0] for x in sorted_docs]
 
@@ -169,31 +181,76 @@ class VectorStoreSearch:
         """
         region, job 에 대해 '$contains' 필터 적용 + similarity_search_with_score
         """
-        filter_condition = {}
+
+        filter_condition = None
         conditions = []
         
         if region:
-            conditions.append({"$contains": region})
+            conditions.append({"근무지역": {"$contains": region}})
         if job:
-            conditions.append({"$contains": job})
+            conditions.append({"채용제목": {"$contains": job}})
 
         if len(conditions) > 1:
-            filter_condition = {"$and": conditions}
-        else:
+            if use_and:
+                filter_condition = {"$and": conditions}
+            else:
+                filter_condition = {"$or": conditions}
+        elif conditions:
             filter_condition = conditions[0]
 
-        results_with_score = self.vectorstore.similarity_search_with_score(
-            query=query,
-            k=top_k*3,
-            where_document=filter_condition
-        )
-        results_with_score.sort(key=lambda x: x[1])  # score(거리) 오름차순
-        selected_docs = [doc for doc, score in results_with_score[:top_k]]
+        try:
+            if filter_condition:
+                results_with_score = self.vectorstore.similarity_search_with_score(
+                    query=query,
+                    k=top_k*3,
+                    where_document=filter_condition
+                )
+            else:
+                # 필터 없이 검색
+                results_with_score = self.vectorstore.similarity_search_with_score(
+                    query=query,
+                    k=top_k*3
+                )
+            
+            # 거리(distance) 기준으로 정렬
+            results_with_score.sort(key=lambda x: x[1])
+            selected_docs = [doc for doc, score in results_with_score[:top_k]]
+            
+            # 검색 거리 메타데이터 추가
+            for doc, dist in zip(selected_docs, [score for _, score in results_with_score[:top_k]]):
+                doc.metadata["search_distance"] = dist
+                
+            return selected_docs
+            
+        except Exception as e:
+            logger.error(f"[VectorStore] 검색 중 에러 발생: {str(e)}")
+            return []
 
-        for i, (doc, dist) in enumerate(results_with_score[:top_k]):
-            doc.metadata["search_distance"] = dist
+    def _advanced_param_search(self, query: Dict[str, Any], top_k: int = 20) -> List[Document]:
+        """새로운 고급 파라미터 기반 검색"""
+        try:
+            conditions = self._build_search_conditions(query)
+            if not conditions:
+                results = self.vectorstore.similarity_search(
+                    query=str(query),
+                    k=top_k
+                )
+                return results
+                
+            filter_condition = conditions[0]
+            for condition in conditions[1:]:
+                filter_condition = filter_condition & condition
 
-        return selected_docs
+            results = self.vectorstore.similarity_search_with_score(
+                query=str(query),
+                k=top_k,
+                where_document=filter_condition
+            )
+            return [doc for doc, _ in results]
+        except Exception as ex:
+            logger.warning(f"고급 검색 실패: {ex}")
+            return []
+
 
     def search_jobs(self, user_ner: dict, top_k: int = 10) -> List[Document]:
         """

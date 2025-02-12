@@ -4,9 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
 from app.agents.job_advisor import JobAdvisorAgent
+from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_ingest import VectorStoreIngest
 from app.services.vector_store_search import VectorStoreSearch
-
 import signal
 import sys
 import json
@@ -15,6 +15,12 @@ from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from db import database_initialize, database_shutdown
 
+# 로깅 설정을 더 자세하게
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # 앱 초기화 및 종료 관리
@@ -22,26 +28,36 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # startup
     try:
+        # 벡터 스토어 초기화
         logger.info("벡터 스토어를 초기화합니다. (ingest)")
         ingest = VectorStoreIngest()  # DB 생성/로드 담당
         collection = ingest.setup_vector_store()  # Chroma 객체
         
         logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
         vector_search = VectorStoreSearch(collection)
+        app.state.vector_search = vector_search  # 앱 상태에 저장
 
         logger.info("벡터 스토어 및 검색 객체 초기화 완료")
+
         
         # LLM과 에이전트 초기화
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
             model_name="gpt-4o-mini",
-            temperature=0.7
+            temperature=0.7,
+            request_timeout=30
         )
+        app.state.llm = llm  # 앱 상태에 저장
         
+        # JobAdvisor 에이전트 초기화
         app.state.job_advisor_agent = JobAdvisorAgent(
             llm=llm,
-            vector_search=vector_search  # 검색 전용 객체 주입
+            vector_search=vector_search
         )
+
+        # TrainingAdvisor 에이전트 초기화 (추가)
+        app.state.training_advisor_agent = TrainingAdvisorAgent(llm)
+
         logger.info("LLM과 에이전트 초기화 완료")
 
         # 라우터 등록
@@ -50,6 +66,7 @@ async def lifespan(app: FastAPI):
         from app.routes import chat_router
         app.include_router(chat_router.router, prefix="/api/v1")
         logger.info("데이터베이스 초기화 및 라우터 등록 완료")
+
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
         raise
@@ -73,11 +90,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 전역 변수
-vector_store = None
-job_advisor_agent = None
-llm = None
-
 def signal_handler(sig, frame):
     """
     시그널 핸들러 - SIGINT(Ctrl+C)나 SIGTERM 시그널을 받으면 실행됨
@@ -91,7 +103,7 @@ def signal_handler(sig, frame):
 async def extract_user_info(request: dict):
     try:
         user_message = request.get("user_message", "")
-        response = llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
+        response = app.state.llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
         info = json.loads(response)
         return info
     except Exception as e:

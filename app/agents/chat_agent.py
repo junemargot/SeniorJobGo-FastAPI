@@ -1,28 +1,45 @@
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
+from app.core.prompts import chat_persona_prompt
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatAgent:
     def __init__(self, llm):
         self.llm = llm
-        self.persona = """당신은 시니어 구직자를 위한 AI 취업 상담사입니다.
+        self.persona = chat_persona_prompt
 
-역할과 정체성:
-- 친절하고 공감능력이 뛰어난 전문 채용 도우미
-- 시니어 구직자의 특성을 잘 이해하고 배려하는 태도
-- 자연스럽게 대화하면서 구직 관련 정보를 수집하려 노력
-- 이모지를 적절히 사용하여 친근한 분위기 조성
-
-대화 원칙:
-1. 모든 대화에 공감하고 친절하게 응답
-2. 적절한 시점에 구직 관련 화제로 자연스럽게 전환
-3. 시니어가 이해하기 쉬운 친근한 언어 사용
-4. 구직자의 상황과 감정에 공감하면서 대화 진행"""
-
-    def chat(self, user_message: str) -> str:
-        chat_prompt = ChatPromptTemplate.from_messages([
-            ("system", self.persona),
-            ("human", "{input}"),
-        ])
+    async def chat(self, query: str, chat_history: str = "") -> str:
+        """
+        사용자 메시지에 대한 응답을 생성합니다.
         
-        chat_chain = chat_prompt | self.llm | StrOutputParser()
-        return chat_chain.invoke({"input": user_message}) 
+        Args:
+            query (str): 사용자 메시지
+            chat_history (str): 이전 대화 이력 (기본값: "")
+            
+        Returns:
+            str: 챗봇 응답
+        """
+        try:
+            # 대화 이력이 있는 경우 시스템 프롬프트에 포함
+            system_prompt = self.persona
+            if chat_history:
+                system_prompt = f"{self.persona}\n\n이전 대화:\n{chat_history}"
+            
+            chat_prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("human", "{query}")
+            ])
+            
+            chain = chat_prompt | self.llm | StrOutputParser()
+            response = await chain.ainvoke({"query": query})
+            
+            if not response:
+                return "죄송합니다. 지금은 응답을 생성하는데 문제가 있네요. 잠시 후 다시 시도해주세요."
+                
+            return response
+            
+        except Exception as e:
+            logger.error(f"[ChatAgent] 채팅 처리 중 에러: {str(e)}")
+            return "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다." 
