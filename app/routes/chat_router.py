@@ -7,10 +7,11 @@ from db.database import db
 from bson import ObjectId
 from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.chat_agent import ChatAgent
-from app.services.vector_store_search import VectorStoreSearch
-from langchain_openai import ChatOpenAI
+
+
 import os
 import json
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ async def chat(
     chat_request: ChatRequest,
     job_advisor_agent: JobAdvisorAgent = Depends(get_job_advisor_agent)
 ) -> ChatResponse:
+    start_time = time.time()
     try:
         if db is None:
             raise Exception("db is None")
@@ -56,14 +58,7 @@ async def chat(
         logger.info(f"[ChatRouter] 프로필: {chat_request.user_profile}")
         
         
-        job_advisor_agent = request.app.state.job_advisor_agent
-        if job_advisor_agent is None:
-            logger.error("[ChatRouter] job_advisor_agent가 초기화되지 않음")
-            return {
-                "error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요.",
-                "processingTime": 0
-            }
-        
+               
         try:
             response = await job_advisor_agent.chat(
                 query=chat_request.user_message,
