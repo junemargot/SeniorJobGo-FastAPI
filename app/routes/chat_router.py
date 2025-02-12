@@ -56,60 +56,58 @@ async def chat(
         _id = request.cookies.get("sjgid")
         logger.info(f"[ChatRouter] 쿠키 ID: {_id}")
         
+        # 쿠키가 없는 경우에도 기본 응답을 반환
         if not _id:
-            logger.error("[ChatRouter] 쿠키에 사용자 ID 없음")
-            raise Exception("쿠키에 사용자 아이디가 없습니다.")
+            logger.warning("[ChatRouter] 쿠키에 사용자 ID 없음 - 기본 응답 반환")
+            return ChatResponse(
+                message=chat_request.user_message,
+                jobPostings=[],
+                trainingCourses=[],
+                type="info",
+                user_profile=chat_request.user_profile or {}
+            )
 
         # 사용자 조회
         user = await db.users.find_one({"_id": ObjectId(_id)})
         if not user:
-            logger.error(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id}")
-            raise Exception("사용자를 찾을 수 없습니다.")
+            logger.warning(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id} - 기본 응답 반환")
+            return ChatResponse(
+                message=chat_request.user_message,
+                jobPostings=[],
+                trainingCourses=[],
+                type="info",
+                user_profile=chat_request.user_profile or {}
+            )
 
         # 이전 대화 이력 가져오기
         chat_history = user.get("messages", [])
         
         # 채용/훈련 정보 관련 대화만 필터링
-        relevant_history = []
-        for i in range(len(chat_history)-1, -1, -1):  # 최신 메시지부터 역순으로 확인
-            msg = chat_history[i]
-            if isinstance(msg, dict):  # dict 타입 체크 추가
-                if msg.get("role") == "bot":
+        formatted_history = ""
+        if chat_history:  # chat_history가 있을 때만 필터링 수행
+            for i in range(len(chat_history)-1, -1, -1):  # 최신 메시지부터 역순으로 확인
+                msg = chat_history[i]
+                if isinstance(msg, dict):  # dict 타입 체크 추가
+                    role = "사용자" if msg.get("role") == "user" else "시스템"
                     content = msg.get("content", "")
-                    # 문자열이 아닌 경우 dict를 문자열로 변환
+                    # dict인 경우 필요한 정보만 추출
                     if isinstance(content, dict):
-                        content = json.dumps(content)
+                        content = content.get("message", "")
                     elif not isinstance(content, str):
                         content = str(content)
-                    
-                    # 채용정보나 훈련정보가 포함된 메시지인지 확인
-                    if ("jobPostings" in content or "trainingCourses" in content or 
-                        "채용정보" in content or "훈련과정" in content):
-                        # 해당 대화쌍(사용자 질문 + 봇 응답) 추가
-                        if i > 0 and isinstance(chat_history[i-1], dict) and chat_history[i-1].get("role") == "user":
-                            relevant_history.extend([chat_history[i-1], msg])
-                        if len(relevant_history) >= 4:  # 최대 2개의 대화쌍만 유지
-                            break
-        
-        # 대화 이력 포맷팅
-        formatted_history = ""
-        for msg in relevant_history:
-            if isinstance(msg, dict):  # dict 타입 체크 추가
-                role = "사용자" if msg.get("role") == "user" else "시스템"
-                content = msg.get("content", "")
-                # dict인 경우 필요한 정보만 추출
-                if isinstance(content, dict):
-                    content = content.get("message", "")
-                elif not isinstance(content, str):
-                    content = str(content)
-                formatted_history += f"{role}: {content}\n"
-            
-        logger.info(f"[ChatRouter] 관련 대화 이력 수: {len(relevant_history)}")
-        logger.info(f"[ChatRouter] 포맷팅된 대화 이력: {formatted_history}")
-        
-        # 이전 검색 결과가 있는지 확인
-        prev_message = formatted_history.split("\n")[-2] if formatted_history else ""
-        if "관련 훈련과정을" in prev_message and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
+                    formatted_history = f"{role}: {content}\n" + formatted_history
+
+        # 이전 검색 결과가 있는지 확인 (빈 대화 이력 처리)
+        prev_message = ""
+        if formatted_history:
+            history_lines = formatted_history.strip().split("\n")
+            for line in reversed(history_lines):
+                if line.startswith("시스템:"):
+                    prev_message = line.replace("시스템:", "").strip()
+                    break
+
+        # 이전 검색에서 훈련과정 관련 키워드가 있는지 확인
+        if prev_message and "관련 훈련과정을" in prev_message and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
             # 이전 검색 키워드 추출
             keyword = prev_message.split("'")[1] if "'" in prev_message else ""
             if keyword:
