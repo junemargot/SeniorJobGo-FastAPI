@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
 from app.agents.job_advisor import JobAdvisorAgent
+from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_ingest import VectorStoreIngest
 from app.services.vector_store_search import VectorStoreSearch
 import signal
@@ -48,10 +49,14 @@ async def lifespan(app: FastAPI):
         )
         app.state.llm = llm  # 앱 상태에 저장
         
+        # JobAdvisor 에이전트 초기화
         app.state.job_advisor_agent = JobAdvisorAgent(
             llm=llm,
-            vector_search=vector_search  # 검색 전용 객체 주입
+            vector_search=vector_search
         )
+
+        # TrainingAdvisor 에이전트 초기화 (추가)
+        app.state.training_advisor_agent = TrainingAdvisorAgent(llm)
 
         logger.info("LLM과 에이전트 초기화 완료")
 

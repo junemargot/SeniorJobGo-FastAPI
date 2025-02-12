@@ -5,8 +5,8 @@ import logging
 from typing import Optional, List, Tuple, Dict, Any
 
 
-from langchain_community.chat_models import ChatOpenAI
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
 
@@ -26,6 +26,10 @@ class VectorStoreSearch:
         vectorstore: 이미 생성/로드된 Chroma 객체
         """
         self.vectorstore = vectorstore
+        self.llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.0
+        )
 
 
     ############################################################################
@@ -199,7 +203,7 @@ class VectorStoreSearch:
                 results_with_score = self.vectorstore.similarity_search_with_score(
                     query=query,
                     k=top_k*3,
-                    filter=filter_condition
+                    where_document=filter_condition
                 )
             else:
                 # 필터 없이 검색
@@ -240,7 +244,7 @@ class VectorStoreSearch:
             results = self.vectorstore.similarity_search_with_score(
                 query=str(query),
                 k=top_k,
-                filter=filter_condition
+                where_document=filter_condition
             )
             return [doc for doc, _ in results]
         except Exception as ex:
