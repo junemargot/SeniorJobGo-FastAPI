@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, Depends
 from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting
+
 from db.database import db
 from bson import ObjectId
 from app.agents.job_advisor import JobAdvisorAgent
@@ -54,9 +55,14 @@ async def chat(
         logger.info(f"[ChatRouter] 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 프로필: {chat_request.user_profile}")
         
+        
+        job_advisor_agent = request.app.state.job_advisor_agent
         if job_advisor_agent is None:
             logger.error("[ChatRouter] job_advisor_agent가 초기화되지 않음")
-            return {"error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요."}
+            return {
+                "error": "서버 초기화 중입니다. 잠시 후 다시 시도해주세요.",
+                "processingTime": 0
+            }
         
         try:
             response = await job_advisor_agent.chat(
@@ -81,6 +87,11 @@ async def chat(
 
             db.users.update_one({"_id": ObjectId(_id)}, {"$set": {"messages": [*legacy_messages, user_message, bot_message]}})
             logger.info("[ChatRouter] 응답 생성 완료")
+            
+            # 처리 시간 계산
+            processing_time = time.time() - start_time
+            response["processingTime"] = round(processing_time, 2)
+            
         except Exception as chat_error:
             logger.error(f"[ChatRouter] chat 메서드 실행 중 에러: {str(chat_error)}", exc_info=True)
             raise
