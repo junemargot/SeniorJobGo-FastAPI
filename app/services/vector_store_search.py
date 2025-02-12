@@ -1,12 +1,15 @@
 import os
 import json
 import logging
+
 from typing import Optional, List, Tuple, Dict, Any
+
 
 from langchain_community.chat_models import ChatOpenAI
 from langchain.docstore.document import Document
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
+
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +20,13 @@ class VectorStoreSearch:
     - 다단계(AND→OR→단독→동의어→임베딩) 검색 + LLM 재랭킹
     """
 
+
     def __init__(self, vectorstore: Chroma):
         """
         vectorstore: 이미 생성/로드된 Chroma 객체
         """
         self.vectorstore = vectorstore
+
 
     ############################################################################
     # A) 내부 유틸
@@ -41,10 +46,12 @@ class VectorStoreSearch:
         score = 0.0
         keys_to_check = ["직무", "근무 지역", "연령대"]
         for key in keys_to_check:
+
             user_val = user_ner.get(key, "").strip().lower()
             doc_val = doc_ner.get(key, "").strip().lower()
             if user_val and doc_val:
                 if user_val in doc_val or doc_val in user_val:
+
                     score += 1.0
         return score
 
@@ -125,6 +132,7 @@ class VectorStoreSearch:
             combined = weight_llm*llm_score + weight_manual*manual_score
             weighted_scores.append( (doc, combined) )
 
+
         sorted_docs = sorted(weighted_scores, key=lambda x: x[1], reverse=True)
         return [x[0] for x in sorted_docs]
 
@@ -169,6 +177,7 @@ class VectorStoreSearch:
         """
         region, job 에 대해 '$contains' 필터 적용 + similarity_search_with_score
         """
+
         filter_condition = None
         conditions = []
         
@@ -237,6 +246,7 @@ class VectorStoreSearch:
         except Exception as ex:
             logger.warning(f"고급 검색 실패: {ex}")
             return []
+
 
     def search_jobs(self, user_ner: dict, top_k: int = 10) -> List[Document]:
         """

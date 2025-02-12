@@ -6,7 +6,6 @@ from app.core.config import settings
 from app.agents.job_advisor import JobAdvisorAgent
 from app.services.vector_store_ingest import VectorStoreIngest
 from app.services.vector_store_search import VectorStoreSearch
-
 import signal
 import sys
 import json
@@ -15,6 +14,12 @@ from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from db import database_initialize, database_shutdown
 
+# 로깅 설정을 더 자세하게
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # 앱 초기화 및 종료 관리
@@ -32,12 +37,14 @@ async def lifespan(app: FastAPI):
         app.state.vector_search = vector_search  # 앱 상태에 저장
 
         logger.info("벡터 스토어 및 검색 객체 초기화 완료")
+
         
         # LLM과 에이전트 초기화
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
             model_name="gpt-4o-mini",
-            temperature=0.7
+            temperature=0.7,
+            request_timeout=30
         )
         app.state.llm = llm  # 앱 상태에 저장
         
@@ -45,6 +52,7 @@ async def lifespan(app: FastAPI):
             llm=llm,
             vector_search=vector_search  # 검색 전용 객체 주입
         )
+
         logger.info("LLM과 에이전트 초기화 완료")
 
         # 라우터 등록
@@ -53,6 +61,7 @@ async def lifespan(app: FastAPI):
         from app.routes import chat_router
         app.include_router(chat_router.router, prefix="/api/v1")
         logger.info("데이터베이스 초기화 및 라우터 등록 완료")
+
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
         raise
