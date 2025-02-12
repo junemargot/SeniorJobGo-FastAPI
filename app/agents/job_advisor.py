@@ -107,49 +107,31 @@ class JobAdvisorAgent:
 
 
     def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str], chat_history: str = "") -> Dict[str, str]:
-        """
-        (1) 사용자 입력 NER 추출
-        (1-1) NER 데이터가 없거나 누락된 항목은 user_profile (age, location, jobType)로 보완
-        """
-
+        """사용자 메시지에서 정보 추출"""
         try:
-            # 1) 사용자 입력 NER
-            ner_chain = self.get_user_ner_runnable()
-            ner_res = ner_chain.invoke({
+            chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
+            response = chain.invoke({
                 "user_query": user_message,
-                "chat_history": chat_history
+                "chat_history": chat_history if chat_history else ""
             })
-            ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
-            cleaned = ner_str.replace("```json", "").replace("```", "").strip()
-
-            try:
-                user_ner = json.loads(cleaned)
-            except json.JSONDecodeError:
-                logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
-                user_ner = {"직무": "", "지역": "", "연령대": ""}
-
-            logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
-
-            # 1-1) 프로필 보완
-            # user_profile: {"age":"", "location":"", "jobType":""}
-            if not user_ner.get("직무") and user_profile.get("jobType"):
-                user_ner["직무"] = user_profile["jobType"]
-            if not user_ner.get("지역") and user_profile.get("location"):
-                user_ner["지역"] = user_profile["location"]
-            if not user_ner.get("연령대") and user_profile.get("age"):
-                user_ner["연령대"] = user_profile["age"]
-
-            logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
+            
+            # JSON 파싱
+            cleaned = response.replace("```json", "").replace("```", "").strip()
+            user_ner = json.loads(cleaned)
+            
+            # 프로필 정보로 보완
+            if user_profile:
+                if not user_ner.get("지역") and user_profile.get("location"):
+                    user_ner["지역"] = user_profile["location"]
+                if not user_ner.get("직무") and user_profile.get("jobType"):
+                    user_ner["직무"] = user_profile["jobType"]
+                    
+            logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
             return user_ner
             
         except Exception as e:
-            logger.error(f"[JobAdvisor] NER 추출 중 에러 발생: {str(e)}")
-            # 에러 발생 시 기본값 반환
-            return {
-                "직무": user_profile.get("jobType", ""),
-                "지역": user_profile.get("location", ""),
-                "연령대": user_profile.get("age", "")
-            }
+            logger.error(f"[JobAdvisor] NER 추출 중 에러: {str(e)}")
+            return {"지역": "", "직무": "", "연령대": ""}
 
 
     ###############################################################################

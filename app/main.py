@@ -103,8 +103,18 @@ def signal_handler(sig, frame):
 async def extract_user_info(request: dict):
     try:
         user_message = request.get("user_message", "")
-        response = app.state.llm.invoke(EXTRACT_INFO_PROMPT.format(query=user_message))
-        info = json.loads(response)
+        chat_history = request.get("chat_history", "")
+        
+        response = app.state.llm.invoke(
+            EXTRACT_INFO_PROMPT.format(
+                user_query=user_message,
+                chat_history=chat_history
+            )
+        )
+        
+        # JSON 파싱 및 반환
+        cleaned = response.content.replace("```json", "").replace("```", "").strip()
+        info = json.loads(cleaned)
         return info
     except Exception as e:
         logger.error(f"Info extraction error: {e}")
