@@ -107,7 +107,7 @@ async def chat(
                     break
 
         # 이전 검색에서 훈련과정 관련 키워드가 있는지 확인
-        if prev_message and "관련 훈련과정을" in prev_message and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
+        if prev_message and "관련 훈련과정을" in prev_message and any(word in chat_request.user_message for word in ["저렴한", "저렴하게", "싼", "무료로", "비용이", "학비가"]):
             # 이전 검색 키워드 추출
             keyword = prev_message.split("'")[1] if "'" in prev_message else ""
             if keyword:
@@ -128,7 +128,7 @@ async def chat(
             raise chat_error
         
         # 가격 필터링이 필요한 경우
-        if response.get("type") == "training" and any(word in chat_request.user_message for word in ["저렴", "무료", "없", "싼"]):
+        if response.get("type") == "training" and any(word in chat_request.user_message for word in ["저렴한", "저렴하게", "싼", "무료로", "비용이", "학비가"]):
             courses = response.get("trainingCourses", [])
             filtered_courses = []
             for course in courses:
