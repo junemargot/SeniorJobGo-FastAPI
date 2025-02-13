@@ -8,6 +8,7 @@ from app.utils.constants import LOCATIONS, DICTIONARY
 from app.agents.chat_agent import ChatAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
+from app.services.document_filter import DocumentFilter
 import logging
 import os
 import json
@@ -45,8 +46,9 @@ class JobAdvisorAgent:
         self.llm = llm
         self.vector_search = vector_search
         self.chat_agent = ChatAgent(llm)
-        self.training_agent = TrainingAdvisorAgent(llm)
+        self.training_agent = TrainingAdvisorAgent(llm)  # 한 번만 생성
         self.workflow = self.setup_workflow()
+        self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
         
         # 기본 프롬프트 템플릿
         self.chat_template = ChatPromptTemplate.from_messages([
@@ -107,49 +109,31 @@ class JobAdvisorAgent:
 
 
     def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str], chat_history: str = "") -> Dict[str, str]:
-        """
-        (1) 사용자 입력 NER 추출
-        (1-1) NER 데이터가 없거나 누락된 항목은 user_profile (age, location, jobType)로 보완
-        """
-
+        """사용자 메시지에서 정보 추출"""
         try:
-            # 1) 사용자 입력 NER
-            ner_chain = self.get_user_ner_runnable()
-            ner_res = ner_chain.invoke({
+            chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
+            response = chain.invoke({
                 "user_query": user_message,
-                "chat_history": chat_history
+                "chat_history": chat_history if chat_history else ""
             })
-            ner_str = ner_res.content if hasattr(ner_res, "content") else str(ner_res)
-            cleaned = ner_str.replace("```json", "").replace("```", "").strip()
-
-            try:
-                user_ner = json.loads(cleaned)
-            except json.JSONDecodeError:
-                logger.warning(f"[JobAdvisor] NER parse fail: {cleaned}")
-                user_ner = {"직무": "", "지역": "", "연령대": ""}
-
-            logger.info(f"[JobAdvisor] 1) user_ner={user_ner}")
-
-            # 1-1) 프로필 보완
-            # user_profile: {"age":"", "location":"", "jobType":""}
-            if not user_ner.get("직무") and user_profile.get("jobType"):
-                user_ner["직무"] = user_profile["jobType"]
-            if not user_ner.get("지역") and user_profile.get("location"):
-                user_ner["지역"] = user_profile["location"]
-            if not user_ner.get("연령대") and user_profile.get("age"):
-                user_ner["연령대"] = user_profile["age"]
-
-            logger.info(f"[JobAdvisor] 1-1) 보완된 user_ner={user_ner}")
+            
+            # JSON 파싱
+            cleaned = response.replace("```json", "").replace("```", "").strip()
+            user_ner = json.loads(cleaned)
+            
+            # 프로필 정보로 보완
+            if user_profile:
+                if not user_ner.get("지역") and user_profile.get("location"):
+                    user_ner["지역"] = user_profile["location"]
+                if not user_ner.get("직무") and user_profile.get("jobType"):
+                    user_ner["직무"] = user_profile["jobType"]
+                    
+            logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
             return user_ner
             
         except Exception as e:
-            logger.error(f"[JobAdvisor] NER 추출 중 에러 발생: {str(e)}")
-            # 에러 발생 시 기본값 반환
-            return {
-                "직무": user_profile.get("jobType", ""),
-                "지역": user_profile.get("location", ""),
-                "연령대": user_profile.get("age", "")
-            }
+            logger.error(f"[JobAdvisor] NER 추출 중 에러: {str(e)}")
+            return {"지역": "", "직무": "", "연령대": ""}
 
 
     ###############################################################################
@@ -354,10 +338,13 @@ class JobAdvisorAgent:
             formatted_history = ""
             if chat_history and isinstance(chat_history, str):
                 logger.info("[JobAdvisor] 대화 이력이 문자열 형태")
-                formatted_history = chat_history
+                # 문자열을 줄바꿈으로 분리하고 최근 3개만 선택
+                history_lines = chat_history.split('\n')
+                recent_history = history_lines[-6:] if len(history_lines) > 6 else history_lines  # 사용자+시스템 메시지 쌍이므로 6줄 (3개 대화)
+                formatted_history = '\n'.join(recent_history)
             elif chat_history and isinstance(chat_history, list):
                 logger.info("[JobAdvisor] 대화 이력이 리스트 형태")
-                for msg in chat_history[-5:]:  # 최근 5개 메시지만 사용
+                for msg in chat_history[-3:]:  # 최근 3개 메시지만 사용
                     logger.info(f"[JobAdvisor] 메시지 처리: {msg}")
                     if isinstance(msg, dict):
                         role = "사용자" if msg.get("role") == "user" else "시스템"
@@ -396,7 +383,15 @@ class JobAdvisorAgent:
         """채용정보 검색 처리"""
         logger.info("[JobAdvisor] 채용정보 검색 시작")
         try:
-            # 대화 이력을 포함하여 NER 추출 (async 제거)
+            # 제외 의도 확인
+            if self.document_filter.check_exclusion_intent(query, chat_history):
+                logger.info("[JobAdvisor] 제외 의도 감지됨")
+                # 이전 결과가 있으면 제외 목록에 추가
+                previous_results = user_profile.get('previous_results', [])
+                if previous_results:
+                    self.document_filter.add_excluded_documents(previous_results)
+
+            # 대화 이력을 포함하여 NER 추출
             user_ner = self._extract_user_ner(query, user_profile, chat_history)
             logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
 
@@ -409,10 +404,15 @@ class JobAdvisorAgent:
                     "user_profile": user_profile
                 }
 
+            # 검색 결과 가져오기
             results = self.vector_search.search_jobs(user_ner=user_ner, top_k=10)
             logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
 
-            if not results:
+            # 필터링 적용
+            filtered_results = self.document_filter.filter_documents(results)
+            logger.info(f"[JobAdvisor] 필터링 후 결과 수: {len(filtered_results)}")
+
+            if not filtered_results:
                 return {
                     "message": "현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 찾아보시겠어요?",
                     "jobPostings": [],
@@ -420,7 +420,8 @@ class JobAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            top_docs = results[:5]
+            # 상위 5개만 선택
+            top_docs = filtered_results[:5]
             job_postings = []
             
             for i, doc in enumerate(top_docs, start=1):
@@ -440,6 +441,9 @@ class JobAdvisorAgent:
                     logger.error(f"[JobAdvisor] 문서 {i} 처리 중 에러: {str(doc_error)}")
                     continue
 
+            # 현재 결과를 user_profile에 저장
+            user_profile['previous_results'] = job_postings
+
             return {
                 "message": f"'{query}' 검색 결과, {len(job_postings)}건의 채용정보를 찾았습니다.",
                 "jobPostings": job_postings,
@@ -456,18 +460,37 @@ class JobAdvisorAgent:
                 "user_profile": user_profile
             }
 
+    def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
+        """훈련과정 목록에서 중복된 과정을 제거합니다."""
+        unique_courses = {}
+        for course in courses:
+            course_id = course.get('id')
+            if course_id not in unique_courses:
+                unique_courses[course_id] = course
+        return list(unique_courses.values())
+
     async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
-        """훈련정보 검색 처리"""
-        logger.info("[JobAdvisor] 훈련정보 검색 시작")
+        """훈련과정 관련 질의 처리"""
         try:
-            # TrainingAdvisorAgent로 위임
-            return await self.training_agent.search_training(query, user_profile)
+            # 기존 training_agent 인스턴스 재사용
+            training_results = await self.training_agent.search_training_courses(query, user_profile)
+            
+            # 중복 제거
+            if training_results.get('trainingCourses'):
+                training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
+                training_results['message'] = training_results['message'].replace(
+                    str(len(training_results['trainingCourses']) + 1),  # 원래 개수
+                    str(len(training_results['trainingCourses']))  # 중복 제거 후 개수
+                )
+            
+            return training_results
+
         except Exception as e:
-            logger.error(f"[JobAdvisor] 훈련정보 검색 중 에러: {str(e)}", exc_info=True)
+            logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
             return {
-                "message": "죄송합니다. 훈련정보 검색 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
                 "trainingCourses": [],
-                "type": "error",
+                "type": "training",
                 "user_profile": user_profile
             }
 
