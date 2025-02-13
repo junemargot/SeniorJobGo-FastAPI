@@ -1,79 +1,73 @@
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
-from app.core.prompts import chat_persona_prompt, CLASSIFY_INTENT_PROMPT
+from app.core.prompts import chat_persona_prompt
 import logging
-from openai import OpenAI
 import os
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
+from langchain_community.tools import DuckDuckGoSearchResults
 from typing import List, Dict, Any, Optional
-import json
 from datetime import datetime
+from langchain_deepseek import ChatDeepSeek
+from langchain_core.messages import HumanMessage, SystemMessage
+from app.services.document_filter import DocumentFilter
 
 logger = logging.getLogger(__name__)
 
 class ChatAgent:
-    def __init__(self, llm=None):  # llm 파라미터는 호환성을 위해 유지
+    def __init__(self, llm=None):
+        """ChatAgent 초기화"""
         self.persona = chat_persona_prompt
-        self.client = OpenAI(
+        self.document_filter = DocumentFilter()  # DocumentFilter 인스턴스 추가
+        
+        # DeepSeek LLM 초기화
+        self.llm = ChatDeepSeek(
+            model_name="deepseek-chat",
+            temperature=0.3,
             api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url="https://api.deepseek.com"
+            api_base="https://api.deepseek.com/v1"
         )
+        
         # DuckDuckGo 검색 초기화
-        self.search = DuckDuckGoSearchAPIWrapper(
-            region="kr-kr",  # 한국 리전
-            time="d",        # 최근 1일
-            max_results=3    # 최대 3개 결과
+        self.search = DuckDuckGoSearchResults(
+            output_format="list"
         )
 
-    async def _classify_intent(self, query: str, chat_history: str = "") -> Dict[str, Any]:
-        """사용자 메시지의 의도를 분류합니다."""
-        try:
-            prompt = CLASSIFY_INTENT_PROMPT.format(
-                user_query=query,
-                chat_history=chat_history
-            )
-            
-            messages = [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": query}
-            ]
-            
-            response = self.client.chat.completions.create(
-                model="deepseek-chat",
-                messages=messages,
-                temperature=0.3,
-                stream=False
-            )
-            
-            result = response.choices[0].message.content
-            cleaned = result.replace("```json", "").replace("```", "").strip()
-            intent_data = json.loads(cleaned)
-            logger.info(f"[ChatAgent] 의도 분류 결과: {intent_data}")
-            return intent_data
-            
-        except Exception as e:
-            logger.error(f"[ChatAgent] 의도 분류 중 오류: {str(e)}")
-            return {"intent": "general", "confidence": 0.5, "explanation": "의도 분류 실패"}
-
-    def _search_web(self, query: str) -> List[Dict[str, str]]:
+    def _search_web(self, query: str, chat_history: str = "") -> List[Dict[str, str]]:
         """웹 검색을 수행하고 결과를 반환합니다."""
         try:
-            results = self.search.run(query)  # .results() 대신 .run() 사용
-            # DuckDuckGo 검색 결과 파싱
-            search_results = []
-            for result in results.split('\n'):
-                if result.strip():
-                    try:
-                        title, link = result.split(' (', 1)
-                        link = link.rstrip(')')
-                        search_results.append({
-                            "title": title.strip(),
-                            "link": link.strip(),
-                            "snippet": ""  # DuckDuckGo API의 기본 결과에는 snippet이 없음
-                        })
-                    except ValueError:
-                        continue
-            return search_results[:3]  # 최대 3개 결과만 반환
+            # 1. 제외 의도 확인
+            has_exclusion = self.document_filter.check_exclusion_intent(query, chat_history)
+            if has_exclusion:
+                logger.info(f"[ChatAgent] 제외 의도 감지됨: {query}")
+            
+            # 2. 검색 수행
+            enhanced_query = f"{query} latest information 2024 facts verified"
+            results = self.search.invoke(enhanced_query)
+            
+            # 3. 결과 처리
+            all_results = []
+            for result in results:
+                try:
+                    domain = result.get("link", "").split("/")[2].replace("www.", "").replace("m.", "")
+                    processed_result = {
+                        "title": result.get("title", "").strip(),
+                        "link": result.get("link", "").strip(),
+                        "source": domain,
+                        "snippet": result.get("snippet", "").strip(),
+                        "type": "web"
+                    }
+                    all_results.append(processed_result)
+                except Exception as e:
+                    logger.error(f"결과 처리 중 오류: {str(e)}")
+                    continue
+
+            # 4. 제외 의도가 있는 경우 필터링 적용
+            if has_exclusion:
+                filtered_results = self.document_filter.filter_documents(all_results)
+                logger.info(f"[ChatAgent] 필터링 전: {len(all_results)}건, 필터링 후: {len(filtered_results)}건")
+                return filtered_results[:5]
+            
+            return all_results[:5]
+
         except Exception as e:
             logger.error(f"[ChatAgent] 웹 검색 중 오류: {str(e)}")
             return []
@@ -83,64 +77,58 @@ class ChatAgent:
         if not results:
             return ""
         
-        formatted = "\n\n참고할 만한 정보:\n"
+        formatted = "\n\nReference Information:\n"
         for r in results:
-            formatted += f"- [{r['title']}]\n"
-            formatted += f"  내용: {r['snippet']}\n"
-            formatted += f"  출처: {r['link']}\n"
-            formatted += f"  (최종 확인: {datetime.now().strftime('%Y-%m-%d')})\n\n"
+            formatted += f"- Title: {r['title']}\n"
+            if r.get("snippet"):
+                formatted += f"  Content: {r['snippet']}\n"
+            formatted += f"  Source: {r['source']}\n"
+            formatted += f"  URL: {r['link']}\n"
+            formatted += f"  (Last Verified: {datetime.now().strftime('%Y-%m-%d')})\n\n"
         return formatted
 
     async def chat(self, query: str, chat_history: str = "") -> str:
-        """
-        사용자 메시지에 대한 응답을 생성합니다.
-        
-        Args:
-            query (str): 사용자 메시지
-            chat_history (str): 이전 대화 이력 (기본값: "")
-            
-        Returns:
-            str: 챗봇 응답
-        """
+        """사용자 메시지에 대한 응답을 생성합니다."""
         try:
             logger.info(f"[ChatAgent] 새로운 채팅 요청: {query}")
             
-            # 1. 의도 분류
-            intent_data = await self._classify_intent(query, chat_history)
+            # 웹 검색 수행
+            search_results = self._search_web(query, chat_history)
+            additional_context = self._format_search_results(search_results)
             
             # 시스템 프롬프트 구성
-            system_prompt = self.persona
+            system_content = self.persona
             if chat_history:
-                system_prompt = f"{self.persona}\n\n이전 대화:\n{chat_history}"
+                system_content += f"\n\n이전 대화:\n{chat_history}"
             
-            # 2. 일반 대화일 경우에만 웹 검색 수행
-            if intent_data["intent"] == "general" and intent_data["confidence"] >= 0.5:
-                search_results = self._search_web(query)
-                additional_context = self._format_search_results(search_results)
-                if additional_context:
-                    system_prompt += "\n검색된 정보를 참고하여 답변해주시되, 정보의 출처를 반드시 언급해주세요."
-                    system_prompt += additional_context
+            if additional_context:
+                system_content += "\n\nIMPORTANT GUIDELINES:\n"
+                system_content += "1. Base your response ONLY on the provided search results\n"
+                system_content += "2. DO NOT make assumptions or generate information not present in the results\n"
+                system_content += "3. If information is insufficient, honestly acknowledge it\n"
+                system_content += "4. Always cite your sources specifically\n"
+                system_content += "5. Stick to verified facts and avoid speculation\n"
+                system_content += additional_context
+            else:
+                system_content += "\n\nCAUTION: No search results found. Please inform the user that you cannot provide accurate information and suggest alternative reliable sources."
 
-            # DeepSeek API 호출
+            # LangChain 메시지 구성
             messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query}
+                SystemMessage(content=system_content),
+                HumanMessage(content=query)
             ]
 
-            response = self.client.chat.completions.create(
-                model="deepseek-chat",
-                messages=messages,
-                temperature=0.7,
-                stream=False
-            )
-
-            if not response.choices:
-                logger.warning("[ChatAgent] 응답이 비어있음")
-                return "죄송합니다. 지금은 응답을 생성하는데 문제가 있네요. 잠시 후 다시 시도해주세요."
-
-            result = response.choices[0].message.content
-            logger.info(f"[ChatAgent] 응답 생성 완료: {result[:100]}...")
-            return result
+            try:
+                # LangChain ChatDeepSeek 호출
+                response = await self.llm.ainvoke(messages)
+                result = response.content
+                
+                logger.info(f"[ChatAgent] 응답 생성 완료: {result[:100]}...")
+                return result
+                
+            except Exception as e:
+                logger.error(f"[ChatAgent] LLM 호출 중 오류: {str(e)}")
+                return "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다. 잠시 후 다시 시도해주세요."
 
         except Exception as e:
             logger.error(f"[ChatAgent] 채팅 처리 중 에러: {str(e)}")
