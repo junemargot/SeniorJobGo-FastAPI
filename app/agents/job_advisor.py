@@ -51,10 +51,11 @@ class JobAdvisorAgent:
         self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
         
         # 기본 프롬프트 템플릿
-        self.chat_template = ChatPromptTemplate.from_messages([
-            ("system", "당신은 구직자를 돕는 전문 취업 상담사입니다."),
-            ("user", "{query}")
-        ])
+        # self.chat_template = ChatPromptTemplate.from_messages([
+        #     ("system", "당신은 구직자를 돕는 전문 취업 상담사입니다."),
+        #     ("user", "{query}")
+        # ])
+        self.chat_template = chat_prompt  # prompts.py의 chat_prompt 사용
 
     async def classify_intent(self, query: str, chat_history: str = "") -> Tuple[str, float]:
         """사용자 메시지의 의도를 분류합니다."""
