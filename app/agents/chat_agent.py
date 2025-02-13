@@ -1,10 +1,9 @@
-from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts import ChatPromptTemplate
+
 from app.core.prompts import chat_persona_prompt
 import logging
 import os
 from langchain_community.tools import DuckDuckGoSearchResults
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
 from datetime import datetime
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, SystemMessage

@@ -67,7 +67,16 @@ class JobAdvisorAgent:
                 "chat_history": chat_history
             })
             
-            # JSON 파싱
+            logger.info(f"[JobAdvisor] LLM 원본 응답: {response}")
+            
+            # JSON 파싱 전에 응답 정제
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
+            
             try:
                 result = json.loads(response)
                 intent = result.get("intent", "general")
@@ -75,6 +84,10 @@ class JobAdvisorAgent:
                 explanation = result.get("explanation", "")
                 
                 logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}, 설명: {explanation}")
+                
+                # 명확한 job 관련 의도인 경우 confidence 상향 조정
+                if intent == "job" and confidence > 0.5:
+                    confidence = max(confidence, 0.8)
                 
                 return intent, confidence
                 
