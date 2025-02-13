@@ -107,89 +107,95 @@ chat_prompt = ChatPromptTemplate.from_messages([
 
 # 정보 추출 프롬프트
 EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
-You are an expert at extracting job-related information from the user's natural conversation.
+You are an expert at extracting job-related information from natural conversations.
 
-Previous conversation:
+Previous conversation context:
 {chat_history}
 
 Current message: {user_query}
 
-Please extract the job type, region, and age group from the above conversation.
-Refer to the previous conversation context to supplement any missing information.
+Task: Extract job type, region, and age group information from the conversation.
+Use the previous conversation context to supplement any missing information.
 
-Be aware of various expressions like:
-- Job type: "일자리" (jobs), "자리" (position), "일거리" (work), "직장" (workplace), "취직" (getting hired), "취업" (employment)
-- Region: "여기" (here), "이 근처" (nearby), "우리 동네" (our neighborhood), "근처" (near), "가까운" (close)
-- Age group: "시니어" (senior), "노인" (elderly), "어르신" (senior), "중장년" (middle-aged)
+Common Expression References:
+1. Job Type Keywords:
+   - Direct: 일자리, 자리, 일거리, 직장
+   - Actions: 취직, 취업
+   
+2. Location Keywords:
+   - Relative: 여기, 이 근처, 우리 동네, 근처, 가까운
+   - Should be standardized to "근처" in output
+   
+3. Age Group Keywords:
+   - Senior terms: 시니어, 노인, 어르신, 중장년
+   - Should be standardized to "시니어" in output
+
+Output Format:
+{{
+    "직무": "extracted job type or empty string",
+    "지역": "extracted region or empty string",
+    "연령대": "extracted age group or empty string"
+}}
+
+Extraction Rules:
+1. For non-specific job mentions (일자리, 일거리, 자리), use empty string for job type
+2. Standardize all proximity terms (여기, 이 근처, etc.) to "근처"
+3. Standardize all senior-related terms to "시니어"
+4. Use context from previous conversation when relevant
 
 Examples:
 1. "서울에서 경비 일자리 좀 알아보려고요" -> {{"직무": "경비", "지역": "서울", "연령대": ""}}
 2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "근처", "연령대": ""}}
 3. "시니어가 할 만한 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "", "연령대": "시니어"}}
-
-Respond **only** in the following JSON format:
-{{
-    "직무": "extracted job type (empty string if none)",
-    "지역": "extracted region (empty string if none)",
-    "연령대": "extracted age group (empty string if none)"
-}}
-
-Special rules:
-1. Even if the job type is not specific, if terms like "일자리", "일거리", or "자리" are mentioned, treat the job type as an empty string.
-2. Standardize all references to "여기", "이 근처", "근처" etc. as "근처" (near).
-3. Standardize all senior-related expressions (시니어, 노인, 어르신, 중장년) as "시니어".
-4. Use previous conversation information to understand the current context.
-
 """)
 
 # 의도 분류 프롬프트 수정
 CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template("""
-You are an expert career counselor specializing in senior job seekers, capable of accurately identifying the user's intent, especially hidden intentions related to job search or vocational training.
+You are an expert career counselor specializing in senior job seekers. Your task is to accurately identify the user's intent, particularly focusing on job search or vocational training intentions.
 
 Previous conversation:
 {chat_history}
 
 Current message: {user_query}
 
-Intents to classify:
-1. job (related to job seeking)
-   - Contains words like 일자리/직장/취업/채용/자리
-   - Mentions of a specific region or position (e.g., "Seoul", "경비" for security guard, "요양보호사" for caregiver)
-   - Mentions of age/experience/job requirements
-   - Inquiries about salary or working hours
-   - Any expression of wanting a job
+Intent Categories:
+1. job (Job Search Related)
+   - Contains keywords: 일자리, 직장, 취업, 채용, 자리
+   - Location or position mentions (e.g., "Seoul", "경비", "요양보호사")
+   - Age/experience/job requirements
+   - Salary or working hours inquiries
+   - Any expression of job seeking
 
-2. training (related to vocational training)
-   - Words like 교육/훈련/자격증/배움 (education/training/certificates/learning)
-   - Questions about government support or “내일배움카드”
-   - Inquiries about acquiring specific skills or certifications
+2. training (Vocational Training Related)
+   - Keywords: 교육, 훈련, 자격증, 배움
+   - Government support or "내일배움카드" inquiries
+   - Questions about skill acquisition or certification
 
-3. general (general conversation)
-   - Simple greetings
-   - Questions about system usage
-   - Small talk or expressions of gratitude
+3. general (General Conversation)
+   - Greetings
+   - System usage questions
+   - Small talk or gratitude expressions
 
-Answer format:
+Response Format:
 {{
     "intent": "job|training|general",
     "confidence": 0.0~1.0,
     "explanation": "One line explaining the classification rationale"
 }}
 
-Special rules:
-1. If there is any possibility of job-related context, classify as "job" (adjust confidence based on relevance).
-2. If both job and training are mentioned, classify as "job" by priority.
-3. If the intent is unclear but there is a potential for job seeking, classify as "job" with lower confidence.
-4. If a job-seeking intent was present in previous conversation, consider subsequent related messages as "job."
-5. If age, region, or job type is mentioned, it likely indicates "job."
+Classification Rules:
+1. Prioritize "job" intent if there's any job-related context
+2. If both job and training are mentioned, classify as "job"
+3. For unclear intents with potential job seeking, use "job" with lower confidence
+4. Consider previous job-seeking context for subsequent messages
+5. Age, location, or job type mentions likely indicate "job" intent
 
 Examples:
-1. "서울에 일자리 있나요?" -> job (0.9)
-2. "40대도 할 수 있나요?" -> job (0.8)
-3. "안녕하세요" -> general (0.9)
-4. "자격증 따고 싶어요" -> training (0.9)
-5. "지역 근처에 뭐 있나요?" -> job (0.7)
-
+1. "서울에 일자리 있나요?" -> {{"intent": "job", "confidence": 0.9, "explanation": "Direct job search request with location"}}
+2. "40대도 할 수 있나요?" -> {{"intent": "job", "confidence": 0.8, "explanation": "Age-related job inquiry"}}
+3. "안녕하세요" -> {{"intent": "general", "confidence": 0.9, "explanation": "Simple greeting"}}
+4. "자격증 따고 싶어요" -> {{"intent": "training", "confidence": 0.9, "explanation": "Certificate acquisition inquiry"}}
+5. "지역 근처에 뭐 있나요?" -> {{"intent": "job", "confidence": 0.7, "explanation": "Implicit job search with location"}}
 """)
 
 # 재랭킹 프롬프트 추가
@@ -234,4 +240,69 @@ Special rules:
 2. If the training program name is not specified, leave it as an empty string.
 3. The duration and cost are optional.
 
+""")
+
+TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template("""
+Extract training/education-related information from the user's message.
+
+Training Classification Reference:
+1. Training Types (훈련종류):
+   - National Tomorrow Learning Card (국민내일배움카드훈련)
+   - Business Training (사업주훈련)
+   - Consortium Training (컨소시엄훈련)
+   - Work and Learning (일학습병행)
+   - Unemployed Training (실업자훈련)
+   - Employee Training (재직자훈련)
+
+2. Training Fields (훈련분야):
+   - IT/Development: AI, Artificial Intelligence, Programming, Big Data, Cloud
+   - Office: Management, Accounting, Marketing, HR
+   - Service: Care Worker, Cooking, Beauty
+   - Technical: Machinery, Electrical, Construction, Automotive
+
+3. Training Locations (훈련지역):
+   - Cities: Seoul, Gyeonggi, Incheon, Busan, Daegu, etc.
+   - Seoul Districts: Gangnam-gu, Gangdong-gu, Nowon-gu, etc.
+
+4. Training Methods (훈련방법):
+   - In-person Training (집체훈련)
+   - On-site Training (현장훈련)
+   - Remote Training (원격훈련)
+   - Blended Training (혼합훈련)
+
+User Message: {user_query}
+
+Please extract and return the following information in JSON format:
+{{
+    "training_type": "Training type in Korean (empty if none)",
+    "training_field": "Training field keyword in Korean (empty if none)",
+    "location": "Location in Korean (empty if none)",
+    "training_method": "Training method in Korean (empty if none)",
+    "cost_info": "Cost-related information in Korean (if any)"
+}}
+
+Examples:
+1. Input: "AI 관련 온라인 강의 찾아줘"
+   Output: {{
+       "training_field": "AI",
+       "training_method": "원격훈련",
+       "location": "",
+       "training_type": "",
+       "cost_info": ""
+   }}
+
+2. Input: "서울 강남구에서 국민내일배움카드로 들을 수 있는 프로그래밍 수업 알려줘"
+   Output: {{
+       "training_field": "프로그래밍",
+       "location": "서울 강남구",
+       "training_type": "국민내일배움카드훈련",
+       "training_method": "",
+       "cost_info": ""
+   }}
+
+Important Notes:
+1. Always return Korean text in the output JSON
+2. Match training types and methods exactly as specified in the reference
+3. For locations, maintain the exact district names (e.g., "강남구" not just "강남")
+4. Keep field values empty ("") if not explicitly mentioned in the user message
 """)
