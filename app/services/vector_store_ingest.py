@@ -13,7 +13,15 @@ from langchain.docstore.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
+from langchain_deepseek import ChatDeepSeek
+from contextlib import nullcontext
 
+# 로깅 설정 추가
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 load_dotenv()
 
@@ -26,15 +34,63 @@ logger = logging.getLogger(__name__)
 
 class SentenceTransformerEmbeddings:
     def __init__(self, model_name: str):
+        import torch
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.info(f"Using device: {self.device}")
+        
+        # CUDA 메모리 캐시 초기화
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
         self.model = SentenceTransformer(model_name)
+        self.model.to(self.device)
+        
+        # CUDA 설정 최적화
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True
+            
+        # 배치 크기 설정
+        self.batch_size = 32 if torch.cuda.is_available() else 8
+        logger.info(f"Batch size set to: {self.batch_size}")
         
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        embeddings = self.model.encode(texts)
-        return embeddings.tolist()  # NumPy 배열을 Python 리스트로 변환
+        import torch
+        
+        # 배치 처리로 변경
+        embeddings = []
+        with torch.amp.autocast('cuda') if torch.cuda.is_available() else nullcontext():
+            for i in range(0, len(texts), self.batch_size):
+                batch = texts[i:i + self.batch_size]
+                logger.info(f"Processing batch {i//self.batch_size + 1}, size: {len(batch)}")
+                
+                batch_embeddings = self.model.encode(
+                    batch,
+                    device=self.device,
+                    show_progress_bar=True,
+                    batch_size=self.batch_size,
+                    convert_to_tensor=True
+                )
+                
+                # GPU 메모리에서 CPU로 이동 후 리스트로 변환
+                batch_embeddings = batch_embeddings.cpu().numpy().tolist()
+                embeddings.extend(batch_embeddings)
+                
+                # 배치 처리 후 GPU 메모리 정리
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    
+        return embeddings
         
     def embed_query(self, text: str) -> List[float]:
-        embedding = self.model.encode(text)
-        return embedding.tolist()  # NumPy 배열을 Python 리스트로 변환
+        import torch
+        with torch.amp.autocast('cuda') if torch.cuda.is_available() else nullcontext():
+            embedding = self.model.encode(
+                text,
+                device=self.device,
+                show_progress_bar=False,
+                convert_to_tensor=True
+            )
+            return embedding.cpu().numpy().tolist()
 
 
 
@@ -202,7 +258,26 @@ class VectorStoreIngest:
                         "세부요건": requirements_text,
                         "LLM_NER": json.dumps(ner_data, ensure_ascii=False),
                         "chunk_index": idx_chunk,
-                        "unique_id": doc_id
+                        "unique_id": doc_id,
+                        # 추가 상세 정보
+                        "담당자": details.get("담당자", ""),
+                        "전화번호": details.get("전화번호", ""),
+                        "이메일": details.get("이메일", ""),
+                        "우대사항": details.get("우대사항", ""),
+                        "제출서류": details.get("제출서류", ""),
+                        "지원방법": details.get("지원방법", ""),
+                        "전형방법": details.get("전형방법", ""),
+                        "접수마감일": details.get("접수마감일", ""),
+                        "사회보험": details.get("사회보험", ""),
+                        "퇴직금여부": details.get("퇴직금여부", ""),
+                        "근무조건": details.get("근무조건", ""),
+                        "근무시간": details.get("근무시간", ""),
+                        "근무환경": details.get("근무환경", ""),
+                        "모집인원": details.get("모집인원", ""),
+                        "학력": details.get("학력", ""),
+                        "경력조건": details.get("경력조건", ""),
+                        "고용형태": details.get("고용형태", ""),
+                        "url": item.get("url", "")  # 지원 URL 추가
                     }
                 )
                 documents.append(doc)
@@ -218,39 +293,46 @@ class VectorStoreIngest:
 
     def _perform_ner(self, text: str) -> dict:
         """LLM 기반 NER 추출"""
-        llm = ChatOpenAI(
-            openai_api_key=os.environ.get("OPENAI_API_KEY"),
-            model_name="gpt-4o-mini",
-            temperature=0.0
-        )
-
-        ner_prompt = PromptTemplate(
-            input_variables=["text"],
-            template=(
-                "다음 채용공고 텍스트에서 주요 정보를 JSON 형식으로 추출해줘.\n\n"
-                "추출해야 할 정보:\n"
-                "- 직무\n"
-                "- 회사명\n"
-                "- 근무 지역\n"
-                "- 연령대\n"
-                "- 경력 요구 사항\n"
-                "- 학력 요건\n"
-                "- 급여 정보\n"
-                "- 고용 형태\n"
-                "- 복리후생\n\n"
-                "채용 공고:\n{text}\n\n"
-                "채용 공고 내에 없는 정보는 비워두거나 적절한 방식으로 처리하고, "
-                "위 정보를 JSON으로만 응답해줘."
-            )
-        )
-
-        chain = ner_prompt | llm
-        ner_result = chain.invoke({"text": text})
-        ner_str = ner_result.content if hasattr(ner_result, "content") else str(ner_result)
-        ner_str = ner_str.replace("```json", "").replace("```", "").strip()
-
         try:
-            return json.loads(ner_str)
-        except json.JSONDecodeError:
-            logger.warning(f"NER JSON parse fail: {ner_str}")
+            # DeepSeek LLM 초기화
+            llm = ChatDeepSeek(
+                model_name="deepseek-chat",
+                temperature=0.0,
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                api_base="https://api.deepseek.com/v1"
+            )
+
+            ner_prompt = PromptTemplate(
+                input_variables=["text"],
+                template=(
+                    "다음 채용공고 텍스트에서 주요 정보를 JSON 형식으로 추출해줘.\n\n"
+                    "추출해야 할 정보:\n"
+                    "- 직무\n"
+                    "- 회사명\n"
+                    "- 근무 지역\n"
+                    "- 연령대\n"
+                    "- 경력 요구 사항\n"
+                    "- 학력 요건\n"
+                    "- 급여 정보\n"
+                    "- 고용 형태\n"
+                    "- 복리후생\n\n"
+                    "채용 공고:\n{text}\n\n"
+                    "채용 공고 내에 없는 정보는 비워두거나 적절한 방식으로 처리하고, "
+                    "위 정보를 JSON으로만 응답해줘."
+                )
+            )
+
+            chain = ner_prompt | llm
+            ner_result = chain.invoke({"text": text})
+            ner_str = ner_result.content if hasattr(ner_result, "content") else str(ner_result)
+            ner_str = ner_str.replace("```json", "").replace("```", "").strip()
+
+            try:
+                return json.loads(ner_str)
+            except json.JSONDecodeError:
+                logger.warning(f"NER JSON parse fail: {ner_str}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"DeepSeek NER 처리 중 오류: {str(e)}")
             return {}
