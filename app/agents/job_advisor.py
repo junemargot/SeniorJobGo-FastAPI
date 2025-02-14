@@ -1,22 +1,17 @@
+import logging
+import os
+import json
 from typing import Dict, List, Tuple
+from langchain_openai import ChatOpenAI
 from langchain_core.documents import Document
+from langchain.schema.runnable import Runnable
 from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt, EXTRACT_INFO_PROMPT, CLASSIFY_INTENT_PROMPT
-from app.utils.constants import LOCATIONS, DICTIONARY
 from app.agents.chat_agent import ChatAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
 from app.services.document_filter import DocumentFilter
-import logging
-import os
-import json
-
-from langchain_openai import ChatOpenAI
-
-from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import Runnable
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +44,6 @@ class JobAdvisorAgent:
         self.training_agent = TrainingAdvisorAgent(llm)  # 한 번만 생성
         self.workflow = self.setup_workflow()
         self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
-        
-        # 기본 프롬프트 템플릿
-        # self.chat_template = ChatPromptTemplate.from_messages([
-        #     ("system", "당신은 구직자를 돕는 전문 취업 상담사입니다."),
-        #     ("user", "{query}")
-        # ])
         self.chat_template = chat_prompt  # prompts.py의 chat_prompt 사용
 
     async def classify_intent(self, query: str, chat_history: str = "") -> Tuple[str, float]:
@@ -260,49 +249,35 @@ class JobAdvisorAgent:
         }
 
     def rewrite(self, state: AgentState) -> dict:
-        query = state['query']
-        
-        rewrite_chain = rewrite_prompt | self.llm | StrOutputParser()
-        response = rewrite_chain.invoke({'query': query})
-        
-        return {'query': response}
+        """쿼리 재작성"""
+        if state.get('is_greeting', False):
+            return {"answer": state['query']}
+            
+        try:
+            # prompts.py의 rewrite_prompt 사용
+            rewrite_chain = rewrite_prompt | self.llm | StrOutputParser()
+            answer = rewrite_chain.invoke({
+                "original_query": state['query'],
+                "transformed_query": state['query']  # 변환된 쿼리
+            })
+            return {"answer": answer.strip()}
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 쿼리 재작성 중 오류: {str(e)}")
+            return {"answer": state['query']}
 
     def generate(self, state: AgentState) -> dict:
-        query = state['query']
-        context = state.get('context', [])
-
-        # 1) jobPostings (이미 retrieve에서 만든 5건)
-        job_postings = state.get("jobPostings", [])
-
-        if not context or not job_postings:
-            return {
-                "message": "죄송합니다. 관련된 구인정보를 찾지 못했습니다.",
-                "jobPostings": [],
-                "type": "info",
-                "user_profile": state.get("user_profile", {})
-            }
-
-        # 2) RAG 프롬프트
-        rag_chain = generate_prompt | self.llm | StrOutputParser()
-        doc_text = "\n\n".join([
-            f"제목: {doc.metadata.get('채용제목', '')}\n"
-            f"회사: {doc.metadata.get('회사명', '')}\n"
-            f"지역: {doc.metadata.get('근무지역', '')}\n"
-            f"급여: {doc.metadata.get('급여조건', '')}\n"
-            f"상세내용: {doc.page_content}"
-            for doc in context[:5]  # 혹은 job_postings의 길이
-        ])
-        response_text = rag_chain.invoke({
-            "question": query,
-            "context": doc_text
-        })
-
-        return {
-            "message": f"최종 답변:\n{response_text}",
-            "jobPostings": job_postings,  # retrieve에서 만든 것 재사용
-            "type": "jobPosting",
-            "user_profile": state.get("user_profile", {})
-        }
+        """응답 생성"""
+        try:
+            # prompts.py의 generate_prompt 사용
+            generate_chain = generate_prompt | self.llm | StrOutputParser()
+            answer = generate_chain.invoke({
+                "question": state['query'],
+                "context": "\n".join([doc.page_content for doc in state['context']])
+            })
+            return {"answer": answer.strip()}
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 응답 생성 중 오류: {str(e)}")
+            return {"answer": "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다."}
 
     def router(self, state: AgentState) -> str:
         # 기본 대화나 인사인 경우 바로 generate로
@@ -325,9 +300,8 @@ class JobAdvisorAgent:
         workflow.add_node("generate", self.generate)
         
         workflow.add_edge("retrieve", "verify")
-        workflow.add_edge("verify", "rewrite")
-        workflow.add_edge("verify", "generate")
-        workflow.add_edge("rewrite", "retrieve")
+        workflow.add_conditional_edges("verify", self.router)
+        workflow.add_conditional_edges("rewrite", self.router)
         workflow.add_edge("generate", END)
         
         workflow.set_entry_point("retrieve")

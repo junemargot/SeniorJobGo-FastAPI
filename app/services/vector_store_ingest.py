@@ -190,9 +190,7 @@ class VectorStoreIngest:
                 doc_id = f"{posting_id}_chunk{idx_chunk}_{hash(chunk_text[:50])}"
                 doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', doc_id)
                 
-                doc = Document(
-                    page_content=chunk_text,
-                    metadata={
+                chunk_metadata = {
                         "채용공고ID": posting_id,
                         "채용제목": job_title,
                         "회사명": company_name,
@@ -200,10 +198,14 @@ class VectorStoreIngest:
                         "급여조건": salary_condition,
                         "직무내용": job_description,
                         "세부요건": requirements_text,
-                        "LLM_NER": json.dumps(ner_data, ensure_ascii=False),
+                        # "LLM_NER": json.dumps(ner_data, ensure_ascii=False),
                         "chunk_index": idx_chunk,
                         "unique_id": doc_id
                     }
+                chunk_metadata.update(ner_data)
+                doc = Document(
+                    page_content=chunk_text,
+                    metadata=chunk_metadata
                 )
                 documents.append(doc)
                 doc_ids.append(doc_id)
