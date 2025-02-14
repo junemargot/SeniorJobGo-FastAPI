@@ -21,6 +21,18 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed_password.encode())
 
+def set_cookie(response: Response, id: str, provider: str):
+    max_age = 60*60*24*30
+    response.set_cookie(key="sjgid", value=id, max_age=max_age)
+    response.set_cookie(key="sjgpr", value=provider, max_age=max_age)
+
+@router.get("/check")
+async def check_cookie(request: Request) -> bool:
+    _id = request.cookies.get("sjgid")
+    provider = request.cookies.get("sjgpr")
+    user = await db.users.find_one({"_id": _id, "provider": provider})
+    return user is not None
+
 # 사용자 회원가입 (Signup)
 @router.post("/signup")
 async def signup_user(request: Request, response: Response):
@@ -43,7 +55,7 @@ async def signup_user(request: Request, response: Response):
 
         user_dict = user.model_dump()
         result = await db.users.insert_one(user_dict)
-        response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
+        set_cookie(response, str(result.inserted_id), "local")
         return {**user_dict, "_id": str(result.inserted_id)}
     except Exception as e:
         print(e)
@@ -63,7 +75,7 @@ async def login_user(request: Request, response: Response) -> bool:
             if verify_password(password, user["password"]):
                 _id = str(user["_id"])
                 await db.users.update_one({"_id": _id}, {"$set": {"last_login": datetime.now()}})
-                response.set_cookie(key="sjgid", value=str(_id), max_age=60*60*24*30)
+                set_cookie(response, str(_id), "local")
                 return True
 
     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -83,7 +95,7 @@ async def guest_login(response: Response):
 
     user_dict = user.model_dump()
     result = await db.users.insert_one(user_dict)
-    response.set_cookie(key="sjgid", value=str(result.inserted_id), max_age=60*60*24*30)
+    set_cookie(response, str(result.inserted_id), "none")
     return {**user_dict, "_id": str(result.inserted_id)}
 
 # 비회원 전부 삭제
@@ -155,7 +167,7 @@ async def kakao_callback(code: str, response: Response):
 
         # 사용자 정보 출력 테스트 코드
         response = Response()
-        response.set_cookie(key="sjgid", value=_id, max_age=60*60*24*30)
+        set_cookie(response, _id, "kakao")
         response.headers["Location"] = "http://localhost:5173/chat"
         response.status_code = 303 # 오류가 아니라 리다이렉트 코드에요
 
