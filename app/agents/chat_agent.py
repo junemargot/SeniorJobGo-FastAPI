@@ -1,4 +1,3 @@
-
 from app.core.prompts import chat_persona_prompt
 import logging
 import os
@@ -72,53 +71,52 @@ class ChatAgent:
             return []
 
     def _format_search_results(self, results: List[Dict[str, str]]) -> str:
-        """검색 결과를 프롬프트에 포함시킬 형태로 포맷팅합니다."""
+        """Format search results for prompt inclusion."""
         if not results:
             return ""
         
-        formatted = "\n\nReference Information:\n"
+        formatted = "\n### Reference Information:\n"
         for r in results:
-            formatted += f"- Title: {r['title']}\n"
+            formatted += f"\n#### {r['title']}\n"
             if r.get("snippet"):
-                formatted += f"  Content: {r['snippet']}\n"
-            formatted += f"  Source: {r['source']}\n"
-            formatted += f"  URL: {r['link']}\n"
-            formatted += f"  (Last Verified: {datetime.now().strftime('%Y-%m-%d')})\n\n"
+                formatted += f"{r['snippet']}\n"
+            formatted += f"*출처: [{r['source']}]({r['link']})*\n"
         return formatted
 
     async def chat(self, query: str, chat_history: str = "") -> str:
-        """사용자 메시지에 대한 응답을 생성합니다."""
+        """Generate a response to the user's message."""
         try:
             logger.info(f"[ChatAgent] 새로운 채팅 요청: {query}")
             
-            # 웹 검색 수행
+            # Web search
             search_results = self._search_web(query, chat_history)
             additional_context = self._format_search_results(search_results)
             
-            # 시스템 프롬프트 구성
+            # System prompt
             system_content = self.persona
+
             if chat_history:
                 system_content += f"\n\n이전 대화:\n{chat_history}"
             
             if additional_context:
-                system_content += "\n\nIMPORTANT GUIDELINES:\n"
-                system_content += "1. Base your response ONLY on the provided search results\n"
-                system_content += "2. DO NOT make assumptions or generate information not present in the results\n"
-                system_content += "3. If information is insufficient, honestly acknowledge it\n"
-                system_content += "4. Always cite your sources specifically\n"
-                system_content += "5. Stick to verified facts and avoid speculation\n"
+                system_content += "\n\nSearch Guidelines:\n"
+                system_content += "1. Summarize key points from search results concisely\n"
+                system_content += "2. Include only essential information\n"
+                system_content += "3. Acknowledge if information is insufficient\n"
+                system_content += "4. Use markdown links for sources\n"
+                system_content += "5. Stick to verified facts\n"
+                system_content += "6. End with: '혹시 채용 정보나 직업 훈련에 대해 더 자세히 알아보고 싶으신가요?'\n"
                 system_content += additional_context
             else:
-                system_content += "\n\nCAUTION: No search results found. Please inform the user that you cannot provide accurate information and suggest alternative reliable sources."
+                system_content += "\n\nNote: No search results found. Inform user and suggest job/training search."
 
-            # LangChain 메시지 구성
+            # LangChain messages
             messages = [
                 SystemMessage(content=system_content),
                 HumanMessage(content=query)
             ]
 
             try:
-                # LangChain ChatDeepSeek 호출
                 response = await self.llm.ainvoke(messages)
                 result = response.content
                 
@@ -127,8 +125,8 @@ class ChatAgent:
                 
             except Exception as e:
                 logger.error(f"[ChatAgent] LLM 호출 중 오류: {str(e)}")
-                return "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다. 잠시 후 다시 시도해주세요."
+                return "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다. 대신 채용 정보나 직업 훈련 정보를 찾아보시겠어요?"
 
         except Exception as e:
             logger.error(f"[ChatAgent] 채팅 처리 중 에러: {str(e)}")
-            return "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다." 
+            return "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다. 채용 정보나 직업 훈련 정보를 찾아보시는 건 어떨까요?" 
