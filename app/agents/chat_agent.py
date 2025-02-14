@@ -1,10 +1,9 @@
-from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts import ChatPromptTemplate
+
 from app.core.prompts import chat_persona_prompt
 import logging
 import os
 from langchain_community.tools import DuckDuckGoSearchResults
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
 from datetime import datetime
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -40,7 +39,7 @@ class ChatAgent:
                 logger.info(f"[ChatAgent] 제외 의도 감지됨: {query}")
             
             # 2. 검색 수행
-            enhanced_query = f"{query} latest information 2024 facts verified"
+            enhanced_query = f"{query} latest information 2025 facts verified"
             results = self.search.invoke(enhanced_query)
             
             # 3. 결과 처리
