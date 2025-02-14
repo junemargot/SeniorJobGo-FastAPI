@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 class TrainingAdvisorAgent:
     """훈련정보 검색 및 추천을 담당하는 에이전트"""
-    
+    ###############################################################################
+    # 에이전트 초기화 및 설정
+    ###############################################################################
+    # LLM 모델, 훈련정보 수집기, 문서 필터 초기화
+    # 지역별/서울 구별 코드 매핑 데이터 설정
+    # 훈련과정 검색을 위한 기반 인프라 구성
     def __init__(self, llm):
         self.llm = llm
         self.collector = TrainingCollector()
@@ -43,6 +48,13 @@ class TrainingAdvisorAgent:
             "중랑구": "JL"
         }
 
+    ###############################################################################
+    # 개체명 인식 (NER) 추출 : 훈련정보 검색 및 추천 처리
+    ###############################################################################
+    # 사용자 입력에서 훈련 관련 정보 추출
+    # 훈련 관련 정보 추출 프롬프트 실행
+    # 추출된 정보를 프로필 정보로 보완
+    # NER 추출 결과 반환
     def _extract_ner(self, query: str, user_profile: Dict = None) -> Dict[str, str]:
         """사용자 입력에서 훈련 관련 정보 추출"""
         try:
@@ -70,6 +82,14 @@ class TrainingAdvisorAgent:
             logger.error(f"[TrainingAdvisor] NER 추출 중 에러: {str(e)}")
             return {"지역": "", "직무": "", "연령대": ""}
 
+    ###############################################################################
+    # 검색 파라미터 구성
+    ###############################################################################
+    # 추출된 개체명 기반 검색 조건 구성
+    # 지역 코드 변환(시/도 -> 코드, 서울 구별 코드 처리)
+    # 직무 키워드 추출 및 검색어 생성
+    # 기본 날짜 범위 설정(오늘 ~ 3개월 후)
+    # 검색 파라미터 반환
     def _build_search_params(self, user_ner: Dict) -> Dict:
         """검색 파라미터 구성"""
         search_params = {
@@ -114,7 +134,14 @@ class TrainingAdvisorAgent:
         search_params["srchTraEndDt"] = three_months_later.strftime("%Y%m%d")
 
         return search_params
-
+    
+    ###############################################################################
+    # 훈련과정 데이터 전처리
+    ###############################################################################
+    # API 응답 데이터를 표준 형식으로 변환
+    # 비용 정보 정수 변환 및 포맷팅
+    # 비용순 정렬 옵션 처리
+    # 불필요 필드 제거
     def _format_training_courses(self, courses: List[Dict], max_count: int = 5, is_low_cost: bool = False) -> List[Dict]:
         """훈련과정 정보 포맷팅"""
         formatted_courses = []
@@ -155,6 +182,12 @@ class TrainingAdvisorAgent:
             
         return formatted_courses
 
+    ###############################################################################
+    # 중복 제거 처리
+    ###############################################################################
+    # 훈련과정 목록에서 중복된 과정을 제거
+    # 과정 ID 기준 중복 제거
+    # 중복 제거된 과정 목록 반환
     def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
         """훈련과정 목록에서 중복된 과정을 제거합니다."""
         unique_courses = {}
@@ -164,6 +197,14 @@ class TrainingAdvisorAgent:
                 unique_courses[course_id] = course
         return list(unique_courses.values())
 
+    ###############################################################################
+    # 훈련과정 검색 메인 워크플로우
+    ###############################################################################
+    # 전체 검색 프로세스 조율(전처리 -> 검색 -> 후처리 -> 응답 생성)
+    # 비용 요구사항/제외 의도 분석
+    # 사용자 프로필 연동 및 이전 결과 저장
+    # 최종 응답 메시지 동적 생성
+    # 예외 처리 및 에러 로깅
     async def search_training_courses(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
         """훈련과정 검색 처리"""
         try:

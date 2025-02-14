@@ -24,7 +24,7 @@ def create_crawler_agent():
     # LLM 초기화
     llm = ChatOpenAI(
         temperature=0,
-        model="gpt-4o-mini"
+        model_name="gpt-4o-mini"
     )
     
     # 상태 그래프 생성

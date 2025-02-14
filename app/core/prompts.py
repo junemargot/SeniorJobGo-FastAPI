@@ -10,72 +10,94 @@ def apply_dictionary_rules(query: str) -> str:
     return pattern.sub(lambda match: DICTIONARY[match.group(0)], query)
 
 # 문서 검증 프롬프트
+# verify_prompt = PromptTemplate.from_template("""
+# 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
+
+# 질문: {query}
+
+# 문서들:
+# {context}
+
+# 답변 형식:
+# - 문서가 충분한 정보를 포함하고 있다면 "YES"
+# - 문서가 충분한 정보를 포함하고 있지 않다면 "NO"
+
+# 답변:
+# """)
 verify_prompt = PromptTemplate.from_template("""
-다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
+Please determine whether the following documents contain enough information to answer the user's question.
 
-질문: {query}
+Question: {query}
 
-문서들:
+Documents:
 {context}
 
-답변 형식:
-- 문서가 충분한 정보를 포함하고 있다면 "YES"
-- 문서가 충분한 정보를 포함하고 있지 않다면 "NO"
+Answer format:
+- If the documents contain sufficient information, reply "YES"
+- If the documents do not contain sufficient information, reply "NO"
 
-답변:
+Answer:
 """)
 
 # 질문 변환 프롬프트 (DICTIONARY 적용됨)
+# rewrite_prompt = PromptTemplate.from_template("""
+# 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
+# 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
+
+# 원본 질문: {original_query}
+
+# 변경된 질문: {transformed_query}
+# """)
 rewrite_prompt = PromptTemplate.from_template("""
-사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
-이때 반드시 사전에 있는 규칙을 적용해야 합니다.
+Look at the user's question and refer to our dictionary to modify the user's question.
+Make sure to strictly apply the rules in the dictionary.
 
-원본 질문: {original_query}
+Original question: {original_query}
 
-변경된 질문: {transformed_query}
-""")
+Modified question: {transformed_query}""")
+
 
 # 채용 공고 추천 프롬프트
 generate_prompt = PromptTemplate.from_template("""
-다음 정보를 바탕으로 구직자에게 도움이 될 만한 답변을 작성해주세요.
-각 채용공고의 지역이 사용자가 찾는 지역과 일치하는지 특히 주의해서 확인해주세요.
+Based on the following information, please compose a helpful response for the job seeker.
+Pay special attention to whether each job posting's region matches the region the user is looking for.
 
-질문: {question}
+Question: {question}
 
-참고할 문서:
+Reference documents:
 {context}
 
-답변 형식:
-발견된 채용공고를 다음과 같은 카드 형태로 보여주세요:
+Answer format:
+Display the discovered job postings in the following card format:
 
-[구분선]
-📍 [지역구] • [회사명]
-[채용공고 제목]
+[Separator]
+📍 [Region] • [Company Name]
+[Job Posting Title]
 
-💰 [급여조건]
-⏰ [근무시간]
-📝 [주요업무 내용 - 한 줄로 요약]
+💰 [Salary Conditions]
+⏰ [Working Hours]
+📝 [Key Job Duties - summarized in one line]
 
-[구분선]
+[Separator]
 
-각 공고마다 위와 같은 형식으로 보여주되, 구직자가 이해하기 쉽게 명확하고 구체적으로 작성해주세요.
-마지막에는 "더 자세한 정보나 지원 방법이 궁금하시다면 채용공고 번호를 말씀해주세요." 라는 문구를 추가해주세요.
+Show each posting in the above format. Make sure the response is clear and detailed so the job seeker can easily understand it.
 """)
 
 # 챗봇 페르소나 설정
-chat_persona_prompt = """당신은 시니어 구직자를 위한 AI 취업 상담사입니다. 
+chat_persona_prompt = """You are an AI job counselor specializing in assisting senior job seekers.
 
-페르소나:
-- 친절하고 공감능력이 뛰어난 상담사
-- 시니어 구직자의 특성을 잘 이해하고 있음
-- 이모지를 적절히 사용하여 친근감 있게 대화
-- 자연스럽게 구직 관련 정보로 대화를 유도
+Persona:
+- A friendly counselor with strong empathy.
+- Fully understands the characteristics and needs of senior job seekers.
+- Uses emojis effectively to create a friendly atmosphere.
+- Naturally guides the conversation toward job search information.
 
-대화 원칙:
-1. 일상적인 대화에도 자연스럽게 응답하되, 구직 관련 주제로 연결
-2. 구직자의 선호도와 조건을 파악하기 위한 질문 포함
-3. 시니어 친화적인 언어 사용
-4. 명확하고 이해하기 쉬운 설명 제공"""
+Conversation principles:
+1. Respond naturally even to casual, everyday conversation, but connect it to job search themes.
+2. Include questions to identify the job seeker's preferences and conditions.
+3. Use language that is friendly to seniors.
+4. Provide clear and easily understandable explanations.
+"""
 
 # 기본 대화 프롬프트
 chat_prompt = ChatPromptTemplate.from_messages([
@@ -85,117 +107,202 @@ chat_prompt = ChatPromptTemplate.from_messages([
 
 # 정보 추출 프롬프트
 EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
-당신은 사용자의 자연스러운 대화에서 구직 관련 정보를 추출하는 전문가입니다.
+You are an expert at extracting job-related information from natural conversations.
 
-이전 대화:
+Previous conversation context:
 {chat_history}
 
-현재 메시지: {user_query}
+Current message: {user_query}
 
-위 대화에서 직무, 지역, 연령대 정보를 추출해주세요.
-이전 대화 내용도 참고하여 누락된 정보를 보완해주세요.
+Task: Extract job type, region, and age group information from the conversation.
+Use the previous conversation context to supplement any missing information.
 
-아래와 같은 다양한 표현들도 인식해야 합니다:
-- 직무: "일자리", "자리", "일거리", "직장", "취직", "취업" 등의 표현
-- 지역: "여기", "이 근처", "우리 동네", "근처", "가까운" 등의 표현
-- 연령대: "시니어", "노인", "어르신", "중장년" 등의 표현
+Common Expression References:
+1. Job Type Keywords:
+   - Direct: 일자리, 자리, 일거리, 직장
+   - Actions: 취직, 취업
+   
+2. Location Keywords:
+   - Relative: 여기, 이 근처, 우리 동네, 근처, 가까운
+   - Should be standardized to "근처" in output
+   
+3. Age Group Keywords:
+   - Senior terms: 시니어, 노인, 어르신, 중장년
+   - Should be standardized to "시니어" in output
 
-예시:
+Output Format:
+{{
+    "직무": "extracted job type or empty string",
+    "지역": "extracted region or empty string",
+    "연령대": "extracted age group or empty string"
+}}
+
+Extraction Rules:
+1. For non-specific job mentions (일자리, 일거리, 자리), use empty string for job type
+2. Standardize all proximity terms (여기, 이 근처, etc.) to "근처"
+3. Standardize all senior-related terms to "시니어"
+4. Use context from previous conversation when relevant
+
+Examples:
 1. "서울에서 경비 일자리 좀 알아보려고요" -> {{"직무": "경비", "지역": "서울", "연령대": ""}}
 2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "근처", "연령대": ""}}
 3. "시니어가 할 만한 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "", "연령대": "시니어"}}
-
-다음 형식의 JSON으로만 응답하세요:
-{{
-    "직무": "추출된 직무 (없으면 빈 문자열)",
-    "지역": "추출된 지역 (없으면 빈 문자열)",
-    "연령대": "추출된 연령대 (없으면 빈 문자열)"
-}}
-
-특별 규칙:
-1. 직무가 명확하지 않더라도 "일자리", "일거리", "자리" 등의 표현이 있으면 빈 문자열로 표시
-2. "여기", "이 근처", "근처" 등의 표현은 "근처"로 통일
-3. 시니어 관련 표현은 모두 "시니어"로 통일
-4. 이전 대화에서 언급된 정보도 활용하여 현재 대화의 맥락을 이해
 """)
 
 # 의도 분류 프롬프트 수정
 CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template("""
-당신은 사용자의 메시지에서 의도를 파악하는 전문가입니다.
-다음 메시지와 대화 이력을 바탕으로 사용자의 의도를 분류해주세요.
+You are an expert career counselor specializing in senior job seekers. Your task is to accurately identify the user's intent, particularly focusing on job search or vocational training intentions.
 
-이전 대화:
+Previous conversation:
 {chat_history}
 
-현재 메시지: {user_query}
+Current message: {user_query}
 
-분류해야 할 의도:
-1. job (구직 관련)
-   - "일자리", "직장", "취업", "채용", "자리" 등의 키워드
-   - 특정 직종이나 일자리 검색 요청 (예: "경비", "요양보호사")
-   - 구직 조건(급여, 근무시간 등) 문의
+Intent Categories:
+1. job (Job Search Related)
+   - Contains keywords: 일자리, 직장, 취업, 채용, 자리
+   - Location or position mentions (e.g., "Seoul", "경비", "요양보호사")
+   - Age/experience/job requirements
+   - Salary or working hours inquiries
+   - Any expression of job seeking
 
-2. training (직업훈련 관련)
-   - "교육", "훈련", "자격증", "배우고", "공부" 등의 키워드
-   - "국비지원", "내일배움카드" 관련 문의
-   - 직업훈련 과정 검색 요청
+2. training (Vocational Training Related)
+   - Keywords: 교육, 훈련, 자격증, 배움
+   - Government support or "내일배움카드" inquiries
+   - Questions about skill acquisition or certification
 
-3. general (일반 대화)
-   - 인사, 감사 등 일상적인 대화
-   - 시스템 사용 방법 문의
-   - 기타 구직/훈련과 관련 없는 대화
+3. general (General Conversation)
+   - Greetings
+   - System usage questions
+   - Small talk or gratitude expressions
 
-아래 형식의 JSON으로만 응답하세요:
+Response Format:
 {{
     "intent": "job|training|general",
     "confidence": 0.0~1.0,
-    "explanation": "분류 이유 한 줄 설명"
+    "explanation": "One line explaining the classification rationale"
 }}
 
-특별 규칙:
-1. 구직과 훈련이 모두 언급된 경우, 더 강조된 의도를 선택
-2. 의도가 불분명한 경우 confidence를 0.5 이하로 설정
-3. 이전 대화 맥락을 고려하여 현재 메시지의 의도를 파악
+Classification Rules:
+1. Prioritize "job" intent if there's any job-related context
+2. If both job and training are mentioned, classify as "job"
+3. For unclear intents with potential job seeking, use "job" with lower confidence
+4. Consider previous job-seeking context for subsequent messages
+5. Age, location, or job type mentions likely indicate "job" intent
+
+Examples:
+1. "서울에 일자리 있나요?" -> {{"intent": "job", "confidence": 0.9, "explanation": "Direct job search request with location"}}
+2. "40대도 할 수 있나요?" -> {{"intent": "job", "confidence": 0.8, "explanation": "Age-related job inquiry"}}
+3. "안녕하세요" -> {{"intent": "general", "confidence": 0.9, "explanation": "Simple greeting"}}
+4. "자격증 따고 싶어요" -> {{"intent": "training", "confidence": 0.9, "explanation": "Certificate acquisition inquiry"}}
+5. "지역 근처에 뭐 있나요?" -> {{"intent": "job", "confidence": 0.7, "explanation": "Implicit job search with location"}}
 """)
 
 # 재랭킹 프롬프트 추가
 rerank_prompt = PromptTemplate.from_template("""
-사용자의 검색 조건과 각 채용공고를 비교하여 적합도를 평가해주세요.
+Please compare the user's search criteria to each job posting and rate how well each posting matches.
 
-사용자 조건:
+User's criteria:
 {user_conditions}
 
-채용공고들:
+Job postings:
 {documents}
 
-각 채용공고의 적합도를 0~5점으로 평가하여 JSON 형식으로 반환해주세요:
-{{"scores": [점수1, 점수2, ...]}}
+Return the suitability score of each job posting as a JSON array from 0 to 5:
+{{"scores": [score1, score2, ...]}}
 
-평가 기준:
-- 지역이 정확히 일치: +2점
-- 직무가 정확히 일치: +2점
-- 연령대가 일치: +1점
-- 지역이 인근: +1점
-- 직무가 유사: +1점
+Evaluation criteria:
+- Exact region match: +2 points
+- Exact job match: +2 points
+- Matching age group: +1 point
+- Nearby region: +1 point
+- Similar job: +1 point
+
 """)
 
 # 훈련정보 관련 프롬프트 추가
 TRAINING_PROMPT = PromptTemplate.from_template("""
-당신은 시니어 구직자를 위한 직업훈련 상담사입니다.
-다음 사용자의 요청에서 훈련과정 검색에 필요한 정보를 추출해주세요.
+You are a vocational training counselor for senior job seekers.
+From the following user request, extract the information necessary to search for training programs.
 
-사용자 요청: {query}
+User request: {query}
 
-다음 형식의 JSON으로 응답해주세요:
+Please respond in the following JSON format:
 {{
-    "지역": "추출된 지역명",
-    "과정명": "훈련과정명",
-    "기간": "희망 기간(있는 경우)",
-    "비용": "희망 비용(있는 경우)"
+    "지역": "extracted region name",
+    "과정명": "extracted training program name",
+    "기간": "desired duration (if any)",
+    "비용": "desired cost (if any)"
 }}
 
-특별 규칙:
-1. 지역이 명시되지 않은 경우 빈 문자열
-2. 과정명이 명시되지 않은 경우 빈 문자열
-3. 기간과 비용은 선택사항
+Special rules:
+1. If the region is not specified, leave it as an empty string.
+2. If the training program name is not specified, leave it as an empty string.
+3. The duration and cost are optional.
+
+""")
+
+TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template("""
+Extract training/education-related information from the user's message.
+
+Training Classification Reference:
+1. Training Types (훈련종류):
+   - National Tomorrow Learning Card (국민내일배움카드훈련)
+   - Business Training (사업주훈련)
+   - Consortium Training (컨소시엄훈련)
+   - Work and Learning (일학습병행)
+   - Unemployed Training (실업자훈련)
+   - Employee Training (재직자훈련)
+
+2. Training Fields (훈련분야):
+   - IT/Development: AI, Artificial Intelligence, Programming, Big Data, Cloud
+   - Office: Management, Accounting, Marketing, HR
+   - Service: Care Worker, Cooking, Beauty
+   - Technical: Machinery, Electrical, Construction, Automotive
+
+3. Training Locations (훈련지역):
+   - Cities: Seoul, Gyeonggi, Incheon, Busan, Daegu, etc.
+   - Seoul Districts: Gangnam-gu, Gangdong-gu, Nowon-gu, etc.
+
+4. Training Methods (훈련방법):
+   - In-person Training (집체훈련)
+   - On-site Training (현장훈련)
+   - Remote Training (원격훈련)
+   - Blended Training (혼합훈련)
+
+User Message: {user_query}
+
+Please extract and return the following information in JSON format:
+{{
+    "training_type": "Training type in Korean (empty if none)",
+    "training_field": "Training field keyword in Korean (empty if none)",
+    "location": "Location in Korean (empty if none)",
+    "training_method": "Training method in Korean (empty if none)",
+    "cost_info": "Cost-related information in Korean (if any)"
+}}
+
+Examples:
+1. Input: "AI 관련 온라인 강의 찾아줘"
+   Output: {{
+       "training_field": "AI",
+       "training_method": "원격훈련",
+       "location": "",
+       "training_type": "",
+       "cost_info": ""
+   }}
+
+2. Input: "서울 강남구에서 국민내일배움카드로 들을 수 있는 프로그래밍 수업 알려줘"
+   Output: {{
+       "training_field": "프로그래밍",
+       "location": "서울 강남구",
+       "training_type": "국민내일배움카드훈련",
+       "training_method": "",
+       "cost_info": ""
+   }}
+
+Important Notes:
+1. Always return Korean text in the output JSON
+2. Match training types and methods exactly as specified in the reference
+3. For locations, maintain the exact district names (e.g., "강남구" not just "강남")
+4. Keep field values empty ("") if not explicitly mentioned in the user message
 """)
