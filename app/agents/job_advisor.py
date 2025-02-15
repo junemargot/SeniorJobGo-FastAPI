@@ -16,6 +16,7 @@ from app.services.document_filter import DocumentFilter
 logger = logging.getLogger(__name__)
 
 
+
 ###############################################################################
 # AgentState
 ###############################################################################
@@ -187,13 +188,21 @@ class JobAdvisorAgent:
         for i, doc in enumerate(top_docs, start=1):
             md = doc.metadata
             job_postings.append({
-                "id": md.get("채용공고ID", "no_id"),
-                "location": md.get("근무지역", ""),
-                "company": md.get("회사명", ""),
-                "title": md.get("채용제목", ""),
-                "salary": md.get("급여조건", ""),
-                "workingHours": md.get("근무시간", "정보없음"),
-                "description": md.get("상세정보", doc.page_content[:200]),
+                "id": md.get("채용공고ID", f"no_id_{i}"),
+                "location": md.get("근무지역", "위치 정보 없음"),
+                "company": md.get("회사명", "회사명 없음"),
+                "title": md.get("채용제목", "제목 없음"),
+                "salary": md.get("급여조건", "급여 정보 없음"),
+                "workingHours": md.get("근무시간", "근무시간 정보 없음"),
+                "description": md.get("상세정보", doc.page_content[:500]) or "상세내용 정보 없음",
+                "phoneNumber": md.get("전화번호", "전화번호 정보 없음"),
+                "deadline": md.get("접수마감일", "마감일 정보 없음"),
+                "requiredDocs": md.get("제출서류", "제출서류 정보 없음"),
+                "hiringProcess": md.get("전형방법", "전형방법 정보 없음"),
+                "insurance": md.get("사회보험", "사회보험 정보 없음"),
+                "jobCategory": md.get("모집직종", "모집직종 정보 없음"),
+                "jobKeywords": md.get("직종키워드", "직종키워드 정보 없음"),
+                "posting_url": md.get("채용공고URL", "채용공고URL 정보 없음"),
                 "rank": i
             })
 
@@ -328,7 +337,7 @@ class JobAdvisorAgent:
                 logger.info("[JobAdvisor] 대화 이력이 문자열 형태")
                 # 문자열을 줄바꿈으로 분리하고 최근 3개만 선택
                 history_lines = chat_history.split('\n')
-                recent_history = history_lines[-6:] if len(history_lines) > 6 else history_lines  # 사용자+시스템 메시지 쌍이므로 6줄 (3개 대화)
+                recent_history = history_lines[-6:] if len(history_lines) > 6 else history_lines
                 formatted_history = '\n'.join(recent_history)
             elif chat_history and isinstance(chat_history, list):
                 logger.info("[JobAdvisor] 대화 이력이 리스트 형태")
@@ -342,8 +351,15 @@ class JobAdvisorAgent:
                         formatted_history += f"{role}: {content}\n"
             logger.info(f"[JobAdvisor] 포맷팅된 대화 이력: {formatted_history}")
             
-            # 의도 분류 (대화 이력 포함)
-            logger.info("[JobAdvisor] 의도 분류 시작")
+            # 직접적인 채용 관련 키워드 체크
+            job_keywords = ["일자리", "채용", "구인", "취업", "직장", "알바", "아르바이트", "일거리", "모집", "자리"]
+            is_job_related = any(keyword in query for keyword in job_keywords)
+            
+            if is_job_related:
+                logger.info("[JobAdvisor] 채용 관련 키워드 감지됨, 채용정보 검색 시작")
+                return await self.handle_job_query(query, user_profile, formatted_history)
+            
+            # 기존 의도 분류 로직
             intent, confidence = await self.classify_intent(query, formatted_history)
             logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}")
             
@@ -422,7 +438,15 @@ class JobAdvisorAgent:
                         "title": md.get("채용제목", "제목 없음"),
                         "salary": md.get("급여조건", "급여 정보 없음"),
                         "workingHours": md.get("근무시간", "근무시간 정보 없음"),
-                        "description": md.get("상세정보", doc.page_content[:300]),
+                        "description": md.get("상세정보", doc.page_content[:500]) or "상세내용 정보 없음",
+                        "phoneNumber": md.get("전화번호", "전화번호 정보 없음"),
+                        "deadline": md.get("접수마감일", "마감일 정보 없음"),
+                        "requiredDocs": md.get("제출서류", "제출서류 정보 없음"),
+                        "hiringProcess": md.get("전형방법", "전형방법 정보 없음"),
+                        "insurance": md.get("사회보험", "사회보험 정보 없음"),
+                        "jobCategory": md.get("모집직종", "모집직종 정보 없음"),
+                        "jobKeywords": md.get("직종키워드", "직종키워드 정보 없음"),
+                        "posting_url": md.get("채용공고URL", "채용공고URL 정보 없음"),
                         "rank": i
                     })
                 except Exception as doc_error:
