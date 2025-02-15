@@ -181,7 +181,7 @@ class JobAdvisorAgent:
             }
 
         # (3) 최대 5건만 추출
-        top_docs = results[:5]
+        top_docs = results[:2]
 
         # (4) Document -> JobPosting 변환
         job_postings = []
@@ -416,7 +416,7 @@ class JobAdvisorAgent:
                     }
 
                 # 상위 5개만 선택
-                top_docs = filtered_results[:5]
+                top_docs = filtered_results[:2]
                 job_postings = []
                 
                 for i, doc in enumerate(top_docs, start=1):
@@ -503,7 +503,7 @@ class JobAdvisorAgent:
                 courses = training_results['trainingCourses']
                 training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
                 training_explanation = training_explanation_chain.invoke({
-                    "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 설명해주세요: {[course['title'] for course in courses]}"
+                    "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in courses]}"
                 })
                 
                 training_results['message'] = training_explanation.strip()
