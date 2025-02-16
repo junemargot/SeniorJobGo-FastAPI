@@ -102,7 +102,7 @@ class TrainingCollector:
             "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼 (TRNG_BGDE: 훈련시작일)
             
             # 선택적 파라미터
-            "srchTraArea1": "",                  # 훈련지역 대분류 (서울: 11)
+            "srchTraArea1": "",                    # 훈련지역 대분류 (서울: 11)
             "srchTraArea2": "",                    # 훈련지역 중분류
             "srchNcs1": "",                        # NCS 직종 대분류
             "srchNcs2": "",                        # NCS 직종 중분류
@@ -116,16 +116,30 @@ class TrainingCollector:
         
         # 사용자 지정 파라미터로 기본값 업데이트
         if params:
+            # NCS 코드 처리
+            if "srchNcs1" in params and params["srchNcs1"]:
+                default_params["srchNcs1"] = params["srchNcs1"]
+            if "srchNcs2" in params and params["srchNcs2"]:
+                default_params["srchNcs2"] = params["srchNcs2"]
+            if "srchNcs3" in params and params["srchNcs3"]:
+                default_params["srchNcs3"] = params["srchNcs3"]
+                
             # 지역 처리
-            if "srchTraArea1" in params:
-                area = params.get("area", "")
-                if area in AREA_CODES:
-                    default_params["srchTraArea1"] = AREA_CODES[area]
-            if "srchTraArea2" in params:
-                district = params.get("district", "")
-                if district in SEOUL_DISTRICT_CODES:
-                    params["srchTraArea2"] = SEOUL_DISTRICT_CODES[district]
-            default_params.update(params)
+            if "srchTraArea1" in params and params["srchTraArea1"]:
+                default_params["srchTraArea1"] = params["srchTraArea1"]
+            if "srchTraArea2" in params and params["srchTraArea2"]:
+                default_params["srchTraArea2"] = params["srchTraArea2"]
+                
+            # 날짜 처리
+            if "srchTraStDt" in params:
+                default_params["srchTraStDt"] = params["srchTraStDt"]
+            if "srchTraEndDt" in params:
+                default_params["srchTraEndDt"] = params["srchTraEndDt"]
+                
+            # 기타 파라미터 업데이트
+            for key in ["pageSize", "outType", "sort", "sortCol"]:
+                if key in params:
+                    default_params[key] = params[key]
         
         # API 요청 전 캐시 무효화를 위한 타임스탬프 추가
         default_params["timestamp"] = str(int(time.time()))

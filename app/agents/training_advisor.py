@@ -10,7 +10,7 @@ from work24.training_collector import TrainingCollector
 from work24.common_codes import CommonCodeCollector, CommonCodeType
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from app.services.document_filter import DocumentFilter
-from app.utils.constants import AREA_CODES
+from app.utils.constants import AREA_CODES, SEOUL_DISTRICT_CODES, INTEREST_NCS_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ class TrainingAdvisorAgent:
         self.document_filter = DocumentFilter()
         self.code_collector = CommonCodeCollector()
         
-        # 지역 코드 초기화
+        # constants.py에서 정의된 코드 사용
         self.area_codes = AREA_CODES
-        self.area_medium_codes = {}
-        self._initialize_area_codes()
+        self.area_medium_codes = SEOUL_DISTRICT_CODES
+        self.interest_ncs_mapping = INTEREST_NCS_MAPPING
         
     def _initialize_area_codes(self):
         """지역 중분류 코드 초기화"""
@@ -142,60 +142,72 @@ class TrainingAdvisorAgent:
     # 직무 키워드 추출 및 검색어 생성
     # 기본 날짜 범위 설정(오늘 ~ 3개월 후)
     # 검색 파라미터 반환
-    def _build_search_params(self, user_ner: Dict) -> Dict:
+    def _build_search_params(self, user_ner: Dict, user_profile: Dict = None) -> Dict:
         """검색 파라미터 구성"""
-        search_params = {
-            "srchTraProcessNm": "",  # 훈련과정명
-            "srchTraArea1": "",      # 지역 코드 (기본값 제거)
-            "srchTraArea2": "",      # 상세 지역
-            "srchTraStDt": "",       # 시작일
-            "srchTraEndDt": "",      # 종료일
-            "pageSize": 50,          # 더 많은 결과를 가져와서 필터링
-            "outType": "1",
-            "sort": "DESC",
-            "sortCol": "TRNG_BGDE"
-        }
-
-        # 1. 지역 정보 처리
-        location = user_ner.get("지역", "").strip()
-        if location:
-            # 서울 구 검색 (부분 매칭 허용)
-            location_normalized = location.replace("구", "").strip()
-            for district, code in self.area_medium_codes.items():
-                district_normalized = district.replace("구", "").strip()
-                if location_normalized in district_normalized or district_normalized in location_normalized:
-                    search_params["srchTraArea1"] = "11"  # 서울
-                    search_params["srchTraArea2"] = code
-                    logger.info(f"[TrainingAdvisor] 서울 구 코드 매칭: {district}({district_normalized}) -> {code}")
-                    break
+        try:
+            logger.info(f"[TrainingAdvisor] 검색 파라미터 구성 시작")
+            logger.info(f"[TrainingAdvisor] 사용자 NER: {user_ner}")
+            logger.info(f"[TrainingAdvisor] 사용자 프로필: {user_profile}")
             
-            # 구 검색이 실패한 경우 시/도 검색
-            if not search_params["srchTraArea2"]:
-                for area, code in self.area_codes.items():
-                    area_normalized = area.replace("시", "").strip()
-                    if area_normalized in location or location in area_normalized:
-                        search_params["srchTraArea1"] = code
-                        logger.info(f"[TrainingAdvisor] 시/도 코드 매칭: {area}({area_normalized}) -> {code}")
-                        break
-
-            # 로깅 추가
-            logger.info(f"[TrainingAdvisor] 지역 매칭 결과: srchTraArea1={search_params['srchTraArea1']}, srchTraArea2={search_params['srchTraArea2']}")
-
-        # 2. 훈련과정명 처리
-        job = user_ner.get("직무", "").strip()
-        if job:
-            keywords = [kw for kw in job.split() if len(kw) >= 2]
-            if keywords:
-                search_params["srchTraProcessNm"] = " ".join(keywords)
-
-        # 3. 날짜 처리 (기본값: 오늘부터 1개월)
-        today = datetime.now()
-        three_months_later = today + timedelta(days=30)
-        search_params["srchTraStDt"] = today.strftime("%Y%m%d")
-        search_params["srchTraEndDt"] = three_months_later.strftime("%Y%m%d")
-
-        logger.info(f"[TrainingAdvisor] 검색 파라미터 구성: location={location}, params={search_params}")
-        return search_params
+            # 오늘부터 2개월 내 시작하는 과정 검색
+            today = datetime.now()
+            two_months_later = today + timedelta(days=60)
+            
+            params = {
+                "srchTraArea1": "",  # 훈련지역 대분류
+                "srchTraArea2": "",  # 훈련지역 중분류
+                "srchNcs1": "",      # NCS 대분류
+                "srchNcs2": "",      # NCS 중분류
+                "srchKeco1": "",     # KECO 대분류
+                "srchKeco2": "",     # KECO 중분류
+                "srchKeco3": "",     # KECO 소분류
+                "srchTraStDt": today.strftime("%Y%m%d"),        # 훈련시작일 From
+                "srchTraEndDt": two_months_later.strftime("%Y%m%d"),  # 훈련시작일 To
+                "pageSize": 50,      # 결과 수
+                "outType": "1",      # 출력형태
+                "sort": "DESC",      # 정렬방법
+                "sortCol": "TRNG_BGDE"  # 정렬컬럼 (훈련시작일)
+            }
+            
+            # 1. 지역 코드 설정
+            region = user_ner.get("지역") or user_profile.get("location", "")
+            if region:
+                logger.info(f"[TrainingAdvisor] 지역 매칭 시작: {region}")
+                # 시/도 분리
+                parts = region.split()
+                city = parts[0] if parts else ""
+                district = parts[1] if len(parts) > 1 else ""
+                
+                # 시/도 코드
+                if city in self.area_codes:
+                    params["srchTraArea1"] = self.area_codes[city]
+                    
+                    # 구/군 코드 (서울인 경우)
+                    if city == "서울" and district:
+                        if district in self.area_medium_codes:
+                            params["srchTraArea2"] = self.area_medium_codes[district]
+                
+                logger.info(f"[TrainingAdvisor] 지역 코드 설정: {params['srchTraArea1']}, {params['srchTraArea2']}")
+            
+            # 2. NCS 코드 설정
+            interests = user_profile.get("interests", []) if user_profile else []
+            if interests:
+                logger.info(f"[TrainingAdvisor] 관심분야 매핑 시작: {interests}")
+                for interest in interests:
+                    if interest in self.interest_ncs_mapping:
+                        mapping = self.interest_ncs_mapping[interest]
+                        params["srchNcs1"] = mapping["ncs1"]
+                        params["srchNcs2"] = mapping["ncs2"]
+                        break  # 첫 번째 매칭되는 관심분야 사용
+                
+                logger.info(f"[TrainingAdvisor] NCS 코드 설정: {params['srchNcs1']}, {params['srchNcs2']}")
+            
+            logger.info(f"[TrainingAdvisor] 최종 검색 파라미터: {params}")
+            return params
+            
+        except Exception as e:
+            logger.error(f"[TrainingAdvisor] 검색 파라미터 구성 중 오류: {str(e)}")
+            return params
     
     ###############################################################################
     # 훈련과정 데이터 전처리
@@ -267,11 +279,14 @@ class TrainingAdvisorAgent:
     # 사용자 프로필 연동 및 이전 결과 저장
     # 최종 응답 메시지 동적 생성
     # 예외 처리 및 에러 로깅
+    
     async def search_training_courses(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
         """훈련과정 검색 처리"""
         try:
             # 저렴한 과정 요청 여부 확인
             is_low_cost = any(keyword in query for keyword in ["저렴한", "싼", "무료", "비용", "적은", "낮은"])
+            logger.info(f"[TrainingAdvisor] 검색 쿼리: {query}")
+            logger.info(f"[TrainingAdvisor] 사용자 프로필: {user_profile}")
             
             # 제외 의도 확인
             if self.document_filter.check_exclusion_intent(query, chat_history):
@@ -282,14 +297,15 @@ class TrainingAdvisorAgent:
 
             # 1. NER 추출
             user_ner = self._extract_ner(query, user_profile)
+            logger.info(f"[TrainingAdvisor] NER 추출 결과: {user_ner}")
             
-            # 2. 검색 파라미터 구성
-            search_params = self._build_search_params(user_ner)
+            # 2. 검색 파라미터 구성 (user_profile 전달)
+            search_params = self._build_search_params(user_ner, user_profile)
             logger.info(f"[TrainingAdvisor] 검색 파라미터: {search_params}")
-            
+        
             # 3. API 호출
             courses = self.collector._fetch_training_list("tomorrow", search_params)
-            logger.info(f"[TrainingAdvisor] 검색 결과 수: {len(courses) if courses else 0}")
+            logger.info(f"[TrainingAdvisor] API 호출 결과: {courses if courses else '결과 없음'}")
 
             if not courses:
                 return {
@@ -302,6 +318,7 @@ class TrainingAdvisorAgent:
             # 4. 결과 포맷팅 (비용순 정렬 적용)
             training_courses = self._format_training_courses(courses, is_low_cost=is_low_cost)
             training_courses = self._deduplicate_training_courses(training_courses)
+            logger.info(f"[TrainingAdvisor] 포맷팅 후 결과 수: {len(training_courses)}")
             
             # 5. 필터링 적용
             filtered_courses = self.document_filter.filter_documents(training_courses)

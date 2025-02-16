@@ -1,0 +1,127 @@
+{
+  "timestamp": "2025-02-17T05:46:38.944123",
+  "data": {
+    "00_": [
+      {
+        "rsltCode": "11",
+        "rsltCodenm": "서울",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26",
+        "rsltCodenm": "부산",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27",
+        "rsltCodenm": "대구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28",
+        "rsltCodenm": "인천",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "29",
+        "rsltCodenm": "광주",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "30",
+        "rsltCodenm": "대전",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "31",
+        "rsltCodenm": "울산",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "36",
+        "rsltCodenm": "세종",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41",
+        "rsltCodenm": "경기",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42",
+        "rsltCodenm": "강원",
+        "useYn": "N",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43",
+        "rsltCodenm": "충북",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44",
+        "rsltCodenm": "충남",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45",
+        "rsltCodenm": "전북",
+        "useYn": "N",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46",
+        "rsltCodenm": "전남",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47",
+        "rsltCodenm": "경북",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48",
+        "rsltCodenm": "경남",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "49",
+        "rsltCodenm": "제주",
+        "useYn": "N",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "50",
+        "rsltCodenm": "제주",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51",
+        "rsltCodenm": "강원",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52",
+        "rsltCodenm": "전북",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ]
+  }
+}

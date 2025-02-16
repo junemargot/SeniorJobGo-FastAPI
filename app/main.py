@@ -14,6 +14,8 @@ import logging
 from contextlib import asynccontextmanager
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from db import database_initialize, database_shutdown
+from app.routes import userInform_router
+from app.routes import training_router
 
 # 로깅 설정을 더 자세하게
 logging.basicConfig(
@@ -89,6 +91,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(userInform_router.router)
+app.include_router(training_router.router)
 
 def signal_handler(sig, frame):
     """
