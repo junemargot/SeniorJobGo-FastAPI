@@ -123,8 +123,9 @@ Common Expression References:
    - Actions: 취직, 취업
    
 2. Location Keywords:
-   - Relative: 여기, 이 근처, 우리 동네, 근처, 가까운
-   - Should be standardized to "근처" in output
+   - Administrative districts: 서울특별시, 서울시, 서울, 강남구, 강북구 등
+   - Only extract actual district names, not relative locations
+   - If user mentions relative locations (여기, 이 근처, 우리 동네 등), leave location empty
    
 3. Age Group Keywords:
    - Senior terms: 시니어, 노인, 어르신, 중장년
@@ -139,14 +140,16 @@ Output Format:
 
 Extraction Rules:
 1. For non-specific job mentions (일자리, 일거리, 자리), use empty string for job type
-2. Standardize all proximity terms (여기, 이 근처, etc.) to "근처"
-3. Standardize all senior-related terms to "시니어"
-4. Use context from previous conversation when relevant
+2. Only extract actual administrative district names for location
+3. If location is relative (여기, 근처 등), leave location field empty
+4. Standardize all senior-related terms to "시니어"
+5. Use context from previous conversation when relevant
 
 Examples:
 1. "서울에서 경비 일자리 좀 알아보려고요" -> {{"직무": "경비", "지역": "서울", "연령대": ""}}
-2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "근처", "연령대": ""}}
-3. "시니어가 할 만한 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "", "연령대": "시니어"}}
+2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "", "연령대": ""}}
+3. "강남구에서 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "강남구", "연령대": ""}}
+4. "여기 근처 식당 일자리 있나요?" -> {{"직무": "식당", "지역": "", "연령대": ""}}
 """)
 
 # 의도 분류 프롬프트 수정
