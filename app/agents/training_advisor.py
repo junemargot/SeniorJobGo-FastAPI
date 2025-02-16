@@ -7,8 +7,10 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from work24.training_collector import TrainingCollector
+from work24.common_codes import CommonCodeCollector, CommonCodeType
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from app.services.document_filter import DocumentFilter
+from app.utils.constants import AREA_CODES
 
 logger = logging.getLogger(__name__)
 
@@ -23,30 +25,45 @@ class TrainingAdvisorAgent:
     def __init__(self, llm):
         self.llm = llm
         self.collector = TrainingCollector()
-        self.document_filter = DocumentFilter()  # 싱글톤 인스턴스 사용
+        self.document_filter = DocumentFilter()
+        self.code_collector = CommonCodeCollector()
         
-        # 지역 코드 매핑
-        self.area_codes = {
-            "서울": "11", "경기": "41", "인천": "28",
-            "부산": "26", "대구": "27", "광주": "29",
-            "대전": "30", "울산": "31", "세종": "36",
-            "강원": "42", "충북": "43", "충남": "44",
-            "전북": "45", "전남": "46", "경북": "47",
-            "경남": "48", "제주": "50"
-        }
+        # 지역 코드 초기화
+        self.area_codes = AREA_CODES
+        self.area_medium_codes = {}
+        self._initialize_area_codes()
         
-        # 서울 구별 코드 매핑
-        self.seoul_district_codes = {
-            "강남구": "GN", "강동구": "GD", "강북구": "GB",
-            "강서구": "GS", "관악구": "GA", "광진구": "GJ",
-            "구로구": "GR", "금천구": "GC", "노원구": "NW",
-            "도봉구": "DB", "동대문구": "DD", "동작구": "DJ",
-            "마포구": "MP", "서대문구": "SD", "서초구": "SC",
-            "성동구": "SD", "성북구": "SB", "송파구": "SP",
-            "양천구": "YC", "영등포구": "YD", "용산구": "YS",
-            "은평구": "EP", "종로구": "JR", "중구": "JG",
-            "중랑구": "JL"
-        }
+    def _initialize_area_codes(self):
+        """지역 중분류 코드 초기화"""
+        try:
+            # 서울(11) 지역의 중분류 코드 조회
+            medium_codes = self.code_collector.fetch_common_codes(
+                CommonCodeType.TRAINING_AREA_MEDIUM,
+                option1="11"  # 서울
+            )
+            
+            # 중분류 코드 매핑 생성
+            if isinstance(medium_codes, list):
+                for code in medium_codes:
+                    # XML 응답의 필드명에 맞게 수정
+                    area_name = code.get("rsltCodenm", "").strip()
+                    area_code = code.get("rsltCode", "")
+                    if area_name and area_code:
+                        # "서울" 제거 및 정규화
+                        area_name = area_name.replace("서울", "").strip()
+                        self.area_medium_codes[area_name] = area_code
+                        # 구 없는 버전도 추가 (예: "강남구" -> "강남")
+                        if area_name.endswith("구"):
+                            self.area_medium_codes[area_name[:-1]] = area_code
+                        
+                logger.info(f"[TrainingAdvisor] 지역 중분류 코드 초기화 완료: {len(self.area_medium_codes)}개")
+                logger.info(f"[TrainingAdvisor] 지역 중분류 코드: {self.area_medium_codes}")
+            else:
+                logger.error(f"[TrainingAdvisor] 중분류 코드 조회 실패: {medium_codes}")
+            
+        except Exception as e:
+            logger.error(f"[TrainingAdvisor] 지역 코드 초기화 중 오류: {str(e)}")
+            logger.error(f"[TrainingAdvisor] medium_codes: {medium_codes if 'medium_codes' in locals() else 'Not available'}")
 
     ###############################################################################
     # 개체명 인식 (NER) 추출 : 훈련정보 검색 및 추천 처리
@@ -58,6 +75,23 @@ class TrainingAdvisorAgent:
     def _extract_ner(self, query: str, user_profile: Dict = None) -> Dict[str, str]:
         """사용자 입력에서 훈련 관련 정보 추출"""
         try:
+            # 1. 직접 지역명 추출 시도
+            location = ""
+            # 서울 구 검색 (다양한 형태 처리)
+            query_normalized = query.strip()
+            for district in self.area_medium_codes.keys():
+                if district in query_normalized:
+                    location = f"서울 {district}"
+                    break
+            
+            # 시/도 검색
+            if not location:
+                for area in self.area_codes.keys():
+                    if area in query_normalized:
+                        location = area
+                        break
+
+            # 2. LLM으로 정보 추출
             chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
             response = chain.invoke({
                 "user_query": query,
@@ -68,7 +102,25 @@ class TrainingAdvisorAgent:
             cleaned = response.replace("```json", "").replace("```", "").strip()
             user_ner = json.loads(cleaned)
             
-            # 프로필 정보로 보완
+            # 3. 직접 추출한 지역명이 있으면 우선 사용
+            if location:
+                user_ner["지역"] = location
+            elif user_ner.get("지역", "").strip():
+                # LLM이 추출한 지역명이 있으면 검증
+                llm_location = user_ner["지역"].strip()
+                # 서울 구 검색
+                for district in self.area_medium_codes.keys():
+                    if district in llm_location:
+                        user_ner["지역"] = f"서울 {district}"
+                        break
+                # 시/도 검색
+                if user_ner["지역"] == llm_location:  # 아직 변경되지 않았다면
+                    for area in self.area_codes.keys():
+                        if area in llm_location:
+                            user_ner["지역"] = area
+                            break
+            
+            # 4. 프로필 정보로 보완
             if user_profile:
                 if not user_ner.get("지역") and user_profile.get("location"):
                     user_ner["지역"] = user_profile["location"]
@@ -94,7 +146,7 @@ class TrainingAdvisorAgent:
         """검색 파라미터 구성"""
         search_params = {
             "srchTraProcessNm": "",  # 훈련과정명
-            "srchTraArea1": "11",    # 지역 코드 (기본 서울)
+            "srchTraArea1": "",      # 지역 코드 (기본값 제거)
             "srchTraArea2": "",      # 상세 지역
             "srchTraStDt": "",       # 시작일
             "srchTraEndDt": "",      # 종료일
@@ -105,34 +157,44 @@ class TrainingAdvisorAgent:
         }
 
         # 1. 지역 정보 처리
-        location = user_ner.get("지역", "")
+        location = user_ner.get("지역", "").strip()
         if location:
-            # 시/도 코드 설정
-            for area, code in self.area_codes.items():
-                if area in location:
-                    search_params["srchTraArea1"] = code
+            # 서울 구 검색 (부분 매칭 허용)
+            location_normalized = location.replace("구", "").strip()
+            for district, code in self.area_medium_codes.items():
+                district_normalized = district.replace("구", "").strip()
+                if location_normalized in district_normalized or district_normalized in location_normalized:
+                    search_params["srchTraArea1"] = "11"  # 서울
+                    search_params["srchTraArea2"] = code
+                    logger.info(f"[TrainingAdvisor] 서울 구 코드 매칭: {district}({district_normalized}) -> {code}")
                     break
-
-            # 서울 상세 지역 처리
-            if "서울" in location:
-                for district, code in self.seoul_district_codes.items():
-                    if district in location:
-                        search_params["srchTraArea2"] = code
+            
+            # 구 검색이 실패한 경우 시/도 검색
+            if not search_params["srchTraArea2"]:
+                for area, code in self.area_codes.items():
+                    area_normalized = area.replace("시", "").strip()
+                    if area_normalized in location or location in area_normalized:
+                        search_params["srchTraArea1"] = code
+                        logger.info(f"[TrainingAdvisor] 시/도 코드 매칭: {area}({area_normalized}) -> {code}")
                         break
 
+            # 로깅 추가
+            logger.info(f"[TrainingAdvisor] 지역 매칭 결과: srchTraArea1={search_params['srchTraArea1']}, srchTraArea2={search_params['srchTraArea2']}")
+
         # 2. 훈련과정명 처리
-        job = user_ner.get("직무", "")
+        job = user_ner.get("직무", "").strip()
         if job:
             keywords = [kw for kw in job.split() if len(kw) >= 2]
             if keywords:
                 search_params["srchTraProcessNm"] = " ".join(keywords)
 
-        # 3. 날짜 처리 (기본값: 오늘부터 3개월)
+        # 3. 날짜 처리 (기본값: 오늘부터 1개월)
         today = datetime.now()
-        three_months_later = today + timedelta(days=90)
+        three_months_later = today + timedelta(days=30)
         search_params["srchTraStDt"] = today.strftime("%Y%m%d")
         search_params["srchTraEndDt"] = three_months_later.strftime("%Y%m%d")
 
+        logger.info(f"[TrainingAdvisor] 검색 파라미터 구성: location={location}, params={search_params}")
         return search_params
     
     ###############################################################################

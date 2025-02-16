@@ -5,6 +5,7 @@ import requests
 from typing import Dict, List, Set
 from urllib.parse import urljoin
 from enum import Enum
+import xmltodict
 
 from .config import (
     TRAINING_APIS,
@@ -85,52 +86,59 @@ class CommonCodeCollector:
         
         return True
     
-    def fetch_common_codes(self, code_type: CommonCodeType, option1: str = "", option2: str = "") -> List[Dict]:
+    def fetch_common_codes(self, code_type: CommonCodeType, option1: str = None) -> List[Dict]:
         """공통코드 조회"""
-        # 옵션 파라미터 유효성 검사
-        if not self._validate_options(code_type, option1, option2):
-            return []
-            
-        api_info = TRAINING_APIS["training_common"]  # 공통코드 API 정보
+        api_info = TRAINING_APIS["training_common"]
         url = urljoin(WORK24_COMMON_URL, api_info["endpoints"]["common"])
         
+        # 파라미터 수정
         params = {
             "authKey": api_info["api_key"],
-            "returnType": "JSON",
-            "outType": "1",           # 리스트 형태
-            "srchType": code_type.value  # 공통코드 구분
+            "returnType": "XML",  # XML로 요청
+            "outType": "1",
+            "srchType": code_type.value,
+            "srchOption1": option1 if option1 else ""
         }
-        
-        # 옵션 파라미터 추가
-        if option1:
-            params["srchOption1"] = option1
-        if option2:
-            params["srchOption2"] = option2
         
         try:
             print(f"\n공통코드 요청 URL: {url}")
             print(f"공통코드 요청 파라미터: {json.dumps(params, ensure_ascii=False, indent=2)}")
             
             response = requests.get(url, params=params)
-            response.raise_for_status()
+            print(f"응답 상태 코드: {response.status_code}")
+            print(f"응답 내용: {response.text[:1000]}")  # 디버깅을 위해 응답 내용 출력
             
-            data = response.json()
-            
-            if isinstance(data, dict) and "scn_list" in data:
-                codes = data["scn_list"]
-                # 캐시에 저장
-                cache_key = f"{code_type.value}_{option1}_{option2}"
-                self.code_cache[cache_key] = codes
-                return codes
+            if response.status_code == 200:
+                try:
+                    # XML을 dict로 변환
+                    data_dict = xmltodict.parse(response.text)
+                    
+                    # XML 구조에 따라 데이터 추출
+                    if "HRDNet" in data_dict:
+                        if "srchList" in data_dict["HRDNet"]:
+                            scn_list = data_dict["HRDNet"]["srchList"]["scn_list"]
+                            # 단일 항목인 경우 리스트로 변환
+                            if isinstance(scn_list, dict):
+                                scn_list = [scn_list]
+                            return [
+                                {
+                                    "rsltCode": item["rsltCode"],
+                                    "rsltCodenm": item["rsltName"]
+                                }
+                                for item in scn_list
+                                if item.get("useYn") == "Y"
+                            ]
+                    return []
+                    
+                except Exception as e:
+                    print(f"XML 파싱 실패: {str(e)}")
+                    return []
             else:
-                print(f"예상치 못한 응답 형식: {type(data)}")
+                print(f"API 요청 실패: {response.status_code}")
                 return []
                 
         except Exception as e:
             print(f"공통코드 조회 중 오류 발생: {str(e)}")
-            if 'response' in locals():
-                print(f"응답 상태 코드: {response.status_code}")
-                print(f"응답 내용: {response.text[:1000]}")
             return []
     
     def get_training_areas(self) -> Dict[str, List[Dict]]:
