@@ -1,33 +1,36 @@
-
-
-from typing import Union, Dict
-from langchain_core.tools import tool
+from typing import Dict, Any
 from langchain.agents import Tool
+from langchain_core.tools import tool
 from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
-from app.agents.sueprvisor_agent import SupervisorAgent
+from app.agents.chat_agent import ChatAgent
+from app.models.flow_state import FlowState
+from app.services.vector_store_search import VectorStoreSearch
+from app.services.vector_store_ingest import VectorStoreIngest
+
 
 # 미리 JobAdvisorAgent를 초기화해둠 (DI 또는 싱글턴)
 ################################################
 # job_advisor_tool
 ################################################
-job_advisor = JobAdvisorAgent(...)
-
-def job_advisor_tool_func(input_text: str) -> str:
-    """
-    JobAdvisorAgent를 호출하기 위해, 
-    Tool에 필요한 'func(input: str) -> str' 시그니처로 감싸는 래퍼(Wrapper).
-    
-    input_text: 사용자 명령(질의 등)
-    반환값: 최종 응답 (문자열)
-    """
-    # 실제로는 JSON 응답 등을 반환할 수 있으나, Tool은 보통 str 입/출력을 권장
-    response_dict = job_advisor.handle_sync_chat(query=input_text)
-    # 위 handle_sync_chat()은 예시 - 실제 구현에 맞춰 'async -> sync' 변환 등
-    
-    # Dict로 받은 응답을 문자열로 변환
-    final_message = response_dict.get("message", "No message")
-    return final_message
+@tool
+def job_advisor_tool_func(state: FlowState) -> FlowState:
+    """JobAdvisorAgent를 위한 Tool 함수"""
+    try:
+        vector_search = VectorStoreSearch(vectorstore=VectorStoreIngest().setup_vector_store())
+        response = JobAdvisorAgent.handle_sync_chat(
+            query=state.query,
+            user_profile=state.user_profile,
+            chat_history=state.chat_history,
+            vector_search=vector_search
+        )
+        
+        state.jobPostings = response.get("jobPostings", [])
+        state.final_response = response
+        return state
+    except Exception as e:
+        state.error_message = f"채용정보 검색 중 오류 발생: {str(e)}"
+        return state
 
 job_advisor_tool = Tool(
     name="job_advisor_tool",
@@ -36,16 +39,24 @@ job_advisor_tool = Tool(
 )
 
 
-# app/agents/tools/training_advisor_tool.py
 ################################################
 # training_advisor_tool
 ################################################
-training_advisor = TrainingAdvisorAgent(...)
-
-def training_advisor_tool_func(input_text: str) -> str:
-    response_dict = training_advisor.handle_sync_search(query=input_text)
-    final_message = response_dict.get("message", "")
-    return final_message
+@tool
+def training_advisor_tool_func(state: FlowState) -> FlowState:
+    """TrainingAdvisorAgent를 위한 Tool 함수"""
+    try:
+        response = TrainingAdvisorAgent.search_training_courses(
+            query=state.query,
+            user_profile=state.user_profile
+        )
+        
+        state.trainingCourses = response.get("trainingCourses", [])
+        state.final_response = response
+        return state
+    except Exception as e:
+        state.error_message = f"훈련과정 검색 중 오류 발생: {str(e)}"
+        return state
 
 training_advisor_tool = Tool(
     name="training_advisor_tool",
@@ -53,19 +64,26 @@ training_advisor_tool = Tool(
     func=training_advisor_tool_func
 )
 
-
-
 ################################################
-# supervisor_agent_tool
+# chat_agent_tool
 ################################################
-supervisor_agent = SupervisorAgent(...)
+@tool
+def chat_agent_tool_func(state: FlowState) -> FlowState:
+    """ChatAgent를 위한 Tool 함수"""
+    try:
+        response = ChatAgent.handle_general_conversation(
+            query=state.query,
+            chat_history=state.chat_history
+        )
+        
+        state.final_response = response
+        return state
+    except Exception as e:
+        state.error_message = f"일반 대화 처리 중 오류 발생: {str(e)}"
+        return state
 
-def supervisor_agent_tool_func(input_text: str) -> str:
-    agent_type = supervisor_agent._determine_agent_type(input_text)
-    return agent_type
-
-supervisor_agent_tool = Tool(
-    name="supervisor_agent_tool",
-    description="사용자의 의도를 판단해 job/training/general을 반환",
-    func=supervisor_agent_tool_func
+chat_agent_tool = Tool(
+    name="chat_agent_tool",
+    description="일반 대화를 처리합니다",
+    func=chat_agent_tool_func
 )

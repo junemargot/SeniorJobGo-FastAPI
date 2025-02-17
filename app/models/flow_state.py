@@ -1,6 +1,6 @@
 # app/models/flow_state.py
-from pydantic import BaseModel
-from typing import Dict, Any, List
+from pydantic import BaseModel, Field
+from typing import Dict, Any, List, Optional
 
 class FlowState(BaseModel):
     query: str = ""              # 사용자 입력
@@ -17,3 +17,5 @@ class FlowState(BaseModel):
     # Job / Training 결과
     jobPostings: List[Dict[str, Any]] = []
     trainingCourses: List[Dict[str, Any]] = []
+
+    messages: List[Dict[str, str]] = Field(default_factory=list)  # 추가

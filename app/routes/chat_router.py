@@ -37,9 +37,38 @@ def get_chat_agent(request: Request, llm=Depends(get_llm)):
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
     try:
-        # 워크플로우 초기화
+        # 요청 시작 로깅
+        logger.info("="*50)
+        logger.info("[ChatRouter] 새로운 채팅 요청 시작")
+        logger.info(f"[ChatRouter] 요청 메시지: {chat_request.user_message}")
+        logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")
+         # 워크플로우 초기화
         workflow = build_flow_graph()
         
+        # DB 체크
+        if db is None:
+            logger.error("[ChatRouter] DB 연결 없음")
+            raise Exception("DB connection is None")
+
+        # 쿠키 체크
+        _id = request.cookies.get("sjgid")
+        logger.info(f"[ChatRouter] 쿠키 ID: {_id}")
+        
+        # 쿠키가 없는 경우에도 기본 응답을 반환
+        if not _id:
+            logger.warning("[ChatRouter] 쿠키에 사용자 ID 없음 - 기본 응답 반환")
+            return ChatResponse(
+                message=chat_request.user_message,
+                jobPostings=[],
+                trainingCourses=[],
+                type="info",
+                user_profile=chat_request.user_profile or {}
+            )
+
+        # 사용자 조회
+        user = await db.users.find_one({"_id": ObjectId(_id)})
+        if not user:
+            logger.warning(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id} - 기본 응답 반환")
         # 초기 상태 설정
         initial_state = FlowState(
             query=chat_request.user_message,
