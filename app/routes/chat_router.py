@@ -186,6 +186,14 @@ async def chat(
                 salary=jp.get("salary", ""),
                 workingHours=jp.get("workingHours", "정보없음"),
                 description=jp.get("description", ""),
+                phoneNumber=jp.get("phoneNumber", ""),
+                deadline=jp.get("deadline", ""),
+                requiredDocs=jp.get("requiredDocs", ""),
+                hiringProcess=jp.get("hiringProcess", ""),
+                insurance=jp.get("insurance", ""),
+                jobCategory=jp.get("jobCategory", ""),
+                jobKeywords=jp.get("jobKeywords", ""),
+                posting_url=jp.get("posting_url", ""),
                 rank=jp.get("rank", idx+1)
             ))
 

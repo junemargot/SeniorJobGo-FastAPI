@@ -14,6 +14,14 @@ class JobPosting(BaseModel):
     salary: str
     workingHours: str
     description: str
+    phoneNumber: str
+    deadline: str
+    requiredDocs: str
+    hiringProcess: str
+    insurance: str
+    jobCategory: str
+    jobKeywords: str
+    posting_url: str
 
 class TrainingCourse(BaseModel):
     id: str

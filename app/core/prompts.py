@@ -123,8 +123,9 @@ Common Expression References:
    - Actions: 취직, 취업
    
 2. Location Keywords:
-   - Relative: 여기, 이 근처, 우리 동네, 근처, 가까운
-   - Should be standardized to "근처" in output
+   - Administrative districts: 서울특별시, 서울시, 서울, 강남구, 강북구 등
+   - Only extract actual district names, not relative locations
+   - If user mentions relative locations (여기, 이 근처, 우리 동네 등), leave location empty
    
 3. Age Group Keywords:
    - Senior terms: 시니어, 노인, 어르신, 중장년
@@ -139,14 +140,16 @@ Output Format:
 
 Extraction Rules:
 1. For non-specific job mentions (일자리, 일거리, 자리), use empty string for job type
-2. Standardize all proximity terms (여기, 이 근처, etc.) to "근처"
-3. Standardize all senior-related terms to "시니어"
-4. Use context from previous conversation when relevant
+2. Only extract actual administrative district names for location
+3. If location is relative (여기, 근처 등), leave location field empty
+4. Standardize all senior-related terms to "시니어"
+5. Use context from previous conversation when relevant
 
 Examples:
 1. "서울에서 경비 일자리 좀 알아보려고요" -> {{"직무": "경비", "지역": "서울", "연령대": ""}}
-2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "근처", "연령대": ""}}
-3. "시니어가 할 만한 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "", "연령대": "시니어"}}
+2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "", "연령대": ""}}
+3. "강남구에서 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "강남구", "연령대": ""}}
+4. "여기 근처 식당 일자리 있나요?" -> {{"직무": "식당", "지역": "", "연령대": ""}}
 """)
 
 # 의도 분류 프롬프트 수정
@@ -305,4 +308,115 @@ Important Notes:
 2. Match training types and methods exactly as specified in the reference
 3. For locations, maintain the exact district names (e.g., "강남구" not just "강남")
 4. Keep field values empty ("") if not explicitly mentioned in the user message
+""")
+
+# 이력서 작성 가이드 프롬프트 추가
+RESUME_GUIDE_PROMPT = PromptTemplate.from_template("""
+You are a professional career counselor specializing in helping senior job seekers write effective resumes.
+
+User Query: {query}
+Previous Chat History: {chat_history}
+
+Task: Provide tailored resume writing advice based on the user's specific question or needs.
+
+Guidelines for Response:
+1. Basic Information Section
+   - Contact details (phone, email)
+   - Professional photo guidelines
+   - Address format
+
+2. Work Experience Section
+   - Reverse chronological order
+   - Achievement-focused descriptions
+   - Quantifiable results
+   - Senior-friendly job history presentation
+
+3. Education & Certifications
+   - Relevant certifications first
+   - Recent training or courses
+   - Skills development emphasis
+
+4. Core Competencies
+   - Age-advantage skills
+   - Transferable skills
+   - Industry-specific expertise
+   - Technology proficiency level
+
+5. Self-Introduction
+   - Experience highlights
+   - Motivation statement
+   - Value proposition
+   - Career transition explanation (if applicable)
+
+Special Considerations for Senior Job Seekers:
+1. Focus on recent experience (last 10-15 years)
+2. Emphasize adaptability and learning ability
+3. Highlight wisdom and stability
+4. Address technology comfort level honestly
+5. Showcase mentoring/leadership abilities
+
+Format your response:
+1. Keep it concise and clear
+2. Use bullet points for easy reading
+3. Provide specific examples
+4. Include age-appropriate language
+5. Focus on strengths relevant to the target position
+
+Remember:
+- Be encouraging and supportive
+- Emphasize experience as an advantage
+- Provide practical, actionable advice
+- Address age-related concerns professionally
+
+Response should be structured as:
+1. Direct answer to the specific question
+2. Relevant examples or templates
+3. Additional tips specific to senior job seekers
+4. Next steps or follow-up suggestions
+""")
+
+# 이력서 피드백 프롬프트 추가
+RESUME_FEEDBACK_PROMPT = PromptTemplate.from_template("""
+You are a professional resume reviewer specializing in senior job seeker resumes.
+
+Resume Content: {resume_content}
+Job Target: {job_target}
+
+Task: Provide constructive feedback on the resume with special consideration for senior job seekers.
+
+Analysis Areas:
+1. Overall Presentation
+   - Layout and formatting
+   - Length and conciseness
+   - Professional appearance
+
+2. Content Effectiveness
+   - Relevance to target position
+   - Achievement highlighting
+   - Experience presentation
+   - Skills emphasis
+
+3. Age-Smart Strategies
+   - Recent experience focus
+   - Technology skills presentation
+   - Adaptability demonstration
+   - Wisdom/experience leverage
+
+4. Red Flags
+   - Age discrimination triggers
+   - Outdated information
+   - Gaps in employment
+   - Technical skill gaps
+
+Provide feedback in the following format:
+1. Strengths (3-4 points)
+2. Areas for Improvement (3-4 points)
+3. Specific Recommendations
+4. Additional Resources or Next Steps
+
+Remember:
+- Be constructive and encouraging
+- Focus on actionable improvements
+- Consider industry-specific needs
+- Address age-related concerns tactfully
 """)
