@@ -8,6 +8,7 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
+from app.utils.constants import SEOUL_DISTRICT_CODES, AREA_CODES
 from .config import (
     TRAINING_APIS,
     WORK24_COMMON_URL,
@@ -84,36 +85,72 @@ class TrainingCollector:
         api_info = TRAINING_APIS[api_type]
         url = urljoin(WORK24_COMMON_URL, api_info["endpoints"]["list"])
         
-        # 기본 파라미터 설정
+        # 현재 날짜 기준으로 3개월 기간 설정
+        today = datetime.now()
+        three_months_later = today + timedelta(days=90)
+        
+        # 기본 파라미터 설정 (공식 API 문서 기준)
         default_params = {
-            "authKey": api_info["api_key"],
-            "returnType": "JSON",
-            "outType": "1",
-            "pageNum": 1,
-            "pageSize": 100,
-            "srchTraArea1": "11",
-            "srchTraArea2": "",
-            "srchNcs1": "",
-            "srchNcs2": "",
-            "srchNcs3": "",
-            "crseTracseSe": "",
-            "srchTraGbn": "",
-            "srchTraType": "",
-            "srchTraStDt": "",
-            "srchTraEndDt": "",
-            "srchTraProcessNm": "",
-            "srchTraOrganNm": "",
-            "sort": "DESC",
-            "sortCol": "TRNG_BGDE"
+            "authKey": api_info["api_key"],        # 필수: 인증키
+            "returnType": "JSON",                  # 필수: 리턴타입 (JSON/XML)
+            "outType": "1",                        # 필수: 출력형태 (1:리스트, 2:상세)
+            "pageNum": "1",                        # 필수: 시작페이지 (최대 1000)
+            "pageSize": "100",                     # 필수: 페이지당 출력건수 (최대 100)
+            "srchTraStDt": today.strftime("%Y%m%d"),           # 필수: 훈련시작일 From
+            "srchTraEndDt": three_months_later.strftime("%Y%m%d"), # 필수: 훈련시작일 To
+            "sort": "DESC",                        # 필수: 정렬방법 (ASC/DESC)
+            "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼 (TRNG_BGDE: 훈련시작일)
+            
+            # 선택적 파라미터
+            "srchTraArea1": "",                    # 훈련지역 대분류 (서울: 11)
+            "srchTraArea2": "",                    # 훈련지역 중분류
+            "srchNcs1": "",                        # NCS 직종 대분류
+            "srchNcs2": "",                        # NCS 직종 중분류
+            "srchNcs3": "",                        # NCS 직종 소분류
+            "crseTracseSe": "C0061",              # 훈련유형 (C0061: 국민내일배움카드)
+            "srchTraGbn": "",                      # 훈련구분코드
+            "srchTraType": "",                     # 훈련종류
+            "srchTraProcessNm": "",                # 훈련과정명
+            "srchTraOrganNm": ""                   # 훈련기관명
         }
         
         # 사용자 지정 파라미터로 기본값 업데이트
         if params:
-            default_params.update(params)
+            # NCS 코드 처리
+            if "srchNcs1" in params and params["srchNcs1"]:
+                default_params["srchNcs1"] = params["srchNcs1"]
+            if "srchNcs2" in params and params["srchNcs2"]:
+                default_params["srchNcs2"] = params["srchNcs2"]
+            if "srchNcs3" in params and params["srchNcs3"]:
+                default_params["srchNcs3"] = params["srchNcs3"]
+                
+            # 지역 처리
+            if "srchTraArea1" in params and params["srchTraArea1"]:
+                default_params["srchTraArea1"] = params["srchTraArea1"]
+            if "srchTraArea2" in params and params["srchTraArea2"]:
+                default_params["srchTraArea2"] = params["srchTraArea2"]
+                
+            # 날짜 처리
+            if "srchTraStDt" in params:
+                default_params["srchTraStDt"] = params["srchTraStDt"]
+            if "srchTraEndDt" in params:
+                default_params["srchTraEndDt"] = params["srchTraEndDt"]
+                
+            # 기타 파라미터 업데이트
+            for key in ["pageSize", "outType", "sort", "sortCol"]:
+                if key in params:
+                    default_params[key] = params[key]
+        
+        # API 요청 전 캐시 무효화를 위한 타임스탬프 추가
+        default_params["timestamp"] = str(int(time.time()))
         
         data = self._make_api_request(url, default_params)
-        if data and isinstance(data, dict) and "srchList" in data:
-            return data["srchList"]
+        if data and isinstance(data, dict):
+            # API 응답 구조에 맞게 처리
+            if "srchList" in data and "scn_list" in data["srchList"]:
+                return data["srchList"]["scn_list"]
+            elif "srchList" in data:
+                return data["srchList"]
         return []
         
     def _fetch_training_info(self, api_type: str, course_id: str, course_degr: str) -> Optional[Dict]:
