@@ -38,7 +38,8 @@ class ChatAgent:
                 logger.info(f"[ChatAgent] 제외 의도 감지됨: {query}")
             
             # 2. 검색 수행
-            enhanced_query = f"{query} latest information 2025 facts verified"
+            current_year = datetime.now().year
+            enhanced_query = f"{query} latest information {current_year} facts verified"
             results = self.search.invoke(enhanced_query)
             
             # 3. 결과 처리

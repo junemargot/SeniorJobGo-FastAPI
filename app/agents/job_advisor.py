@@ -7,7 +7,9 @@ from langchain_core.documents import Document
 from langchain.schema.runnable import Runnable
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
+
 from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt, EXTRACT_INFO_PROMPT, CLASSIFY_INTENT_PROMPT, RESUME_GUIDE_PROMPT, RESUME_FEEDBACK_PROMPT
+
 from app.agents.chat_agent import ChatAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
@@ -115,25 +117,56 @@ class JobAdvisorAgent:
     def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str], chat_history: str = "") -> Dict[str, str]:
         """사용자 메시지에서 정보 추출"""
         try:
-            chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
-            response = chain.invoke({
-                "user_query": user_message,
-                "chat_history": chat_history if chat_history else ""
-            })
+            # 1. 먼저 사전을 이용한 직접 매칭 시도
+            extracted_info = {"지역": "", "직무": "", "연령대": ""}
             
-            # JSON 파싱
-            cleaned = response.replace("```json", "").replace("```", "").strip()
-            user_ner = json.loads(cleaned)
+            # 지역 매칭
+            for location in LOCATIONS:
+                if location in user_message:
+                    extracted_info["지역"] = location
+                    break
             
-            # 프로필 정보로 보완
+            # 직무 매칭 및 유의어 확인
+            words = user_message.split()
+            for word in words:
+                if word in JOB_SYNONYMS:
+                    extracted_info["직무"] = word
+                    break
+                # 유의어 검색
+                for job, synonyms in JOB_SYNONYMS.items():
+                    if word in synonyms:
+                        extracted_info["직무"] = job
+                        break
+            
+            # 2. 사전 매칭으로 충분한 정보를 얻지 못한 경우 LLM 사용
+            if not (extracted_info["지역"] or extracted_info["직무"]):
+                chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
+                response = chain.invoke({
+                    "user_query": user_message,
+                    "chat_history": chat_history if chat_history else ""
+                })
+                
+                # JSON 파싱
+                cleaned = response.replace("```json", "").replace("```", "").strip()
+                llm_extracted = json.loads(cleaned)
+                
+                # LLM 결과와 사전 매칭 결과 병합
+                if not extracted_info["지역"] and llm_extracted.get("지역"):
+                    extracted_info["지역"] = llm_extracted["지역"]
+                if not extracted_info["직무"] and llm_extracted.get("직무"):
+                    extracted_info["직무"] = llm_extracted["직무"]
+                if llm_extracted.get("연령대"):
+                    extracted_info["연령대"] = llm_extracted["연령대"]
+            
+            # 3. 프로필 정보로 보완
             if user_profile:
-                if not user_ner.get("지역") and user_profile.get("location"):
-                    user_ner["지역"] = user_profile["location"]
-                if not user_ner.get("직무") and user_profile.get("jobType"):
-                    user_ner["직무"] = user_profile["jobType"]
+                if not extracted_info["지역"] and user_profile.get("location"):
+                    extracted_info["지역"] = user_profile["location"]
+                if not extracted_info["직무"] and user_profile.get("jobType"):
+                    extracted_info["직무"] = user_profile["jobType"]
                     
-            logger.info(f"[JobAdvisor] NER 추출 결과: {user_ner}")
-            return user_ner
+            logger.info(f"[JobAdvisor] NER 추출 결과: {extracted_info}")
+            return extracted_info
             
         except Exception as e:
             logger.error(f"[JobAdvisor] NER 추출 중 에러: {str(e)}")
