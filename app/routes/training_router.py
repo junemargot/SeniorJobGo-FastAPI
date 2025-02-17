@@ -30,9 +30,8 @@ async def search_trainings(
     search_params: TrainingSearchRequest,
     training_advisor = Depends(get_training_advisor)
 ):
-    """훈련정보 검색 API"""
+    """훈련정보 검색 API - 모달에서 직접 검색할 때 사용"""
     try:
-        # 검색 파라미터 로깅
         logger.info(f"[TrainingRouter] 훈련과정 검색 파라미터: {search_params}")
 
         # 지역 정보 처리
@@ -53,9 +52,7 @@ async def search_trainings(
         if search_params.preferredDuration:
             search_query += f"선호기간: {search_params.preferredDuration}, "
 
-        logger.info(f"[TrainingRouter] 검색 쿼리: {search_query}")
-
-        # TrainingAdvisorAgent에 전달할 user_profile 구성
+        # 사용자 프로필 구성
         user_profile = {
             "location": location,
             "interests": search_params.interests,
@@ -63,33 +60,23 @@ async def search_trainings(
             "preferredDuration": search_params.preferredDuration
         }
 
-        logger.info(f"[TrainingRouter] 사용자 프로필: {user_profile}")
-
-        # TrainingAdvisorAgent의 search_training_courses 메서드 호출
-        try:
-            result = await training_advisor.search_training_courses(
-                query=search_query.rstrip(", "),
-                user_profile=user_profile
-            )
-            logger.info(f"[TrainingRouter] 검색 결과: {result}")
-        except Exception as search_error:
-            logger.error(f"[TrainingRouter] 훈련과정 검색 중 오류: {str(search_error)}", exc_info=True)
-            raise search_error
+        # 훈련과정 검색 실행
+        result = await training_advisor.search_training_courses(
+            query=search_query.rstrip(", "),
+            user_profile=user_profile
+        )
 
         # 응답 구성
         if not result.get("trainingCourses"):
-            logger.warning("[TrainingRouter] 검색 결과 없음")
             return {
                 "message": "죄송합니다. 현재 조건에 맞는 훈련과정을 찾지 못했습니다.",
                 "trainingCourses": []
             }
 
-        response = {
+        return {
             "message": result.get("message", f"{location or '전국'} 지역의 훈련과정을 {len(result.get('trainingCourses', []))}건 찾았습니다."),
             "trainingCourses": result.get("trainingCourses", [])
         }
-        logger.info(f"[TrainingRouter] 응답 전송: {response}")
-        return response
 
     except Exception as e:
         logger.error(f"[TrainingRouter] 처리 중 오류 발생: {str(e)}", exc_info=True)
@@ -100,7 +87,7 @@ async def search_trainings(
 
 @router.get("/locations")
 async def get_locations():
-    """지역 정보 조회 API"""
+    """지역 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
         locations = {
             "서울": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", 
@@ -120,7 +107,7 @@ async def get_locations():
 
 @router.get("/interests")
 async def get_interests():
-    """관심 분야 정보 조회 API"""
+    """관심 분야 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
         interests = [
             "사무행정", "IT/컴퓨터", "요양보호", "조리/외식", 

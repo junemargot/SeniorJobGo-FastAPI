@@ -317,10 +317,12 @@ class TrainingAdvisorAgent:
 
             # 4. 결과 포맷팅 (비용순 정렬 적용)
             training_courses = self._format_training_courses(courses, is_low_cost=is_low_cost)
-            training_courses = self._deduplicate_training_courses(training_courses)
-            logger.info(f"[TrainingAdvisor] 포맷팅 후 결과 수: {len(training_courses)}")
             
-            # 5. 필터링 적용
+            # 5. 중복 제거
+            training_courses = self._deduplicate_training_courses(training_courses)
+            logger.info(f"[TrainingAdvisor] 중복 제거 후 결과 수: {len(training_courses)}")
+            
+            # 6. 필터링 적용
             filtered_courses = self.document_filter.filter_documents(training_courses)
             logger.info(f"[TrainingAdvisor] 필터링 후 결과 수: {len(filtered_courses)}")
 
@@ -332,14 +334,23 @@ class TrainingAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            # 6. 상위 5개만 선택
+            # 7. 상위 5개만 선택
             top_courses = filtered_courses[:5]
 
-            # 7. 현재 결과를 user_profile에 저장
+            # 8. 현재 결과를 user_profile에 저장
             if user_profile is not None:
                 user_profile['previous_training_results'] = top_courses
 
-            # 8. 응답 메시지 생성
+            # 9. 전문적인 설명 생성
+            from app.core.prompts import chat_prompt
+            from langchain_core.output_parsers import StrOutputParser
+            
+            training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
+            training_explanation = training_explanation_chain.invoke({
+                "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in top_courses]}"
+            })
+
+            # 10. 응답 메시지 생성
             location = user_ner.get("지역", "")
             job = user_ner.get("직무", "")
             
@@ -350,10 +361,10 @@ class TrainingAdvisorAgent:
                 message_parts.append(f"'{job}' 관련")
             
             cost_message = "비용이 낮은 순으로" if is_low_cost else ""
-            message = f"{' '.join(message_parts)} 훈련과정을 {cost_message} {len(top_courses)}개 찾았습니다."
+            base_message = f"{' '.join(message_parts)} 훈련과정을 {cost_message} {len(top_courses)}개 찾았습니다."
 
             return {
-                "message": message.strip(),
+                "message": f"{base_message}\n\n{training_explanation.strip()}",
                 "trainingCourses": top_courses,
                 "type": "training",
                 "user_profile": user_profile

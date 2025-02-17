@@ -330,12 +330,6 @@ class JobAdvisorAgent:
             logger.info(f"[JobAdvisor] 대화 이력 첫 번째 항목: {chat_history[0] if chat_history else None}")
 
         try:
-            # 이력서 관련 키워드 체크 추가
-            resume_keywords = ["이력서", "자기소개서", "자소서", "이력서 작성", "이력서 쓰는 법"]
-            if any(keyword in query for keyword in resume_keywords):
-                logger.info("[JobAdvisor] 이력서 관련 키워드 감지됨, 일반 대화 처리")
-                return await self.handle_general_conversation(query, chat_history)
-
             # 직접적인 채용 관련 키워드 체크
             job_keywords = ["일자리", "채용", "구인", "취업", "직장", "알바", "아르바이트", "일거리", "모집", "자리"]
             is_job_related = any(keyword in query for keyword in job_keywords)
@@ -344,7 +338,7 @@ class JobAdvisorAgent:
                 logger.info("[JobAdvisor] 채용 관련 키워드 감지됨, 채용정보 검색 시작")
                 return await self.handle_job_query(query, user_profile, chat_history)
             
-            # 기존 의도 분류 로직
+            # 의도 분류
             intent, confidence = await self.classify_intent(query, chat_history)
             logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}")
             
@@ -357,9 +351,9 @@ class JobAdvisorAgent:
                     logger.info("[JobAdvisor] 훈련정보 검색 처리 시작")
                     return await self.handle_training_query(query, user_profile)
             
-            # 낮은 확신도 또는 일반 대화인 경우
-            logger.info("[JobAdvisor] 일반 대화 처리 시작")
-            return await self.handle_general_conversation(query, chat_history)
+            # 낮은 확신도 또는 일반 대화인 경우 ChatAgent로 위임
+            logger.info("[JobAdvisor] 일반 대화 처리를 ChatAgent로 위임")
+            return await self.chat_agent.handle_general_conversation(query, chat_history)
             
         except Exception as e:
             logger.error(f"[JobAdvisor] 채팅 처리 중 에러: {str(e)}", exc_info=True)
@@ -416,7 +410,7 @@ class JobAdvisorAgent:
                     }
 
                 # 상위 5개만 선택
-                top_docs = filtered_results[:2]
+                top_docs = filtered_results[:5]
                 job_postings = []
                 
                 for i, doc in enumerate(top_docs, start=1):
@@ -480,79 +474,41 @@ class JobAdvisorAgent:
                 "user_profile": user_profile
             }
 
-    def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
-        """훈련과정 목록에서 중복된 과정을 제거합니다."""
-        unique_courses = {}
-        for course in courses:
-            course_id = course.get('id')
-            if course_id not in unique_courses:
-                unique_courses[course_id] = course
-        return list(unique_courses.values())
+    # def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
+    #     """훈련과정 목록에서 중복된 과정을 제거합니다."""
+    #     unique_courses = {}
+    #     for course in courses:
+    #         course_id = course.get('id')
+    #         if course_id not in unique_courses:
+    #             unique_courses[course_id] = course
+    #     return list(unique_courses.values())
 
-    async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
-        """훈련과정 관련 질의 처리"""
-        try:
-            # 기존 training_agent 인스턴스 재사용
-            training_results = await self.training_agent.search_training_courses(query, user_profile)
+    # async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
+    #     """훈련과정 관련 질의 처리"""
+    #     try:
+    #         # 기존 training_agent 인스턴스 재사용
+    #         training_results = await self.training_agent.search_training_courses(query, user_profile)
             
-            # 중복 제거
-            if training_results.get('trainingCourses'):
-                training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
+    #         # 중복 제거
+    #         if training_results.get('trainingCourses'):
+    #             training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
                 
-                # 훈련 과정에 대한 전문적인 설명 생성
-                courses = training_results['trainingCourses']
-                training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
-                training_explanation = training_explanation_chain.invoke({
-                    "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in courses]}"
-                })
+    #             # 훈련 과정에 대한 전문적인 설명 생성
+    #             courses = training_results['trainingCourses']
+    #             training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
+    #             training_explanation = training_explanation_chain.invoke({
+    #                 "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in courses]}"
+    #             })
                 
-                training_results['message'] = training_explanation.strip()
+    #             training_results['message'] = training_explanation.strip()
             
-            return training_results
+    #         return training_results
 
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
-            return {
-                "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
-                "trainingCourses": [],
-                "type": "training",
-                "user_profile": user_profile
-            }
-
-    async def handle_general_conversation(self, query: str, chat_history: str = None) -> Dict:
-        """일반적인 대화를 처리합니다."""
-        try:
-            # 이력서 관련 키워드 체크
-            resume_keywords = ["이력서", "자기소개서", "자소서", "이력서 작성", "이력서 쓰는 법"]
-            if any(keyword in query for keyword in resume_keywords):
-                # 이력서 가이드 프롬프트 사용
-                resume_chain = RESUME_GUIDE_PROMPT | self.llm | StrOutputParser()
-                response = resume_chain.invoke({
-                    "query": query,
-                    "chat_history": chat_history if chat_history else ""
-                })
-                
-                return {
-                    "message": response.strip(),
-                    "type": "general"
-                }
-
-            # 기존의 일반 대화 처리 로직
-            messages = [
-                {"role": "system", "content": "당신은 시니어 구직자를 위한 취업 상담사입니다. 친절하고 전문적으로 응답해주세요."},
-                {"role": "user", "content": query}
-            ]
-            chat_response = await self.chat_agent.chat(query, messages)
-            return {
-                "message": chat_response,
-                "jobPostings": [],
-                "type": "info",
-                "user_profile": {}
-            }
-
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 일반 대화 처리 중 에러: {str(e)}")
-            return {
-                "message": "죄송합니다. 일반 대화 처리 중에 문제가 발생했습니다.",
-                "type": "error"
-            }
+    #     except Exception as e:
+    #         logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
+    #         return {
+    #             "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
+    #             "trainingCourses": [],
+    #             "type": "training",
+    #             "user_profile": user_profile
+    #         }

@@ -1,13 +1,9 @@
-# FastApi_SeniorJobGo/app/routes/userInform_router.py
-
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Optional, Dict
 from pydantic import BaseModel
-from langchain_openai import ChatOpenAI
+import logging
 
-from app.agents.job_advisor import JobAdvisorAgent
-from app.services.vector_store_search import VectorStoreSearch
-from app.services.document_filter import DocumentFilter
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/jobs",
@@ -28,18 +24,16 @@ class JobSearchRequest(BaseModel):
 
 def get_job_advisor(request: Request):
     """JobAdvisorAgent 인스턴스 가져오기"""
-    
     return request.app.state.job_advisor_agent
 
 @router.post("/search")
 async def search_jobs(
     search_params: JobSearchRequest,
-    job_advisor: JobAdvisorAgent = Depends(get_job_advisor)
+    job_advisor = Depends(get_job_advisor)
 ):
-    """채용정보 검색 API"""
+    """채용정보 검색 API - 모달에서 직접 검색할 때 사용"""
     try:
-        # 검색 파라미터 로깅
-        print(f"검색 파라미터: {search_params}")
+        logger.info(f"[JobRouter] 검색 파라미터: {search_params}")
 
         # 지역 정보 처리
         location = search_params.location
@@ -48,7 +42,7 @@ async def search_jobs(
             if search_params.district:
                 location += f" {search_params.district}"
 
-        # JobAdvisorAgent에 전달할 user_profile 구성
+        # 사용자 프로필 구성
         user_profile = {
             "location": location,
             "jobType": search_params.jobType,
@@ -69,8 +63,8 @@ async def search_jobs(
             search_query += f"근무형태: {search_params.workType}, "
         if search_params.career:
             search_query += f"경력: {search_params.career}, "
-        
-        # JobAdvisorAgent의 handle_job_query 메서드 호출
+
+        # 채용정보 검색 실행
         result = await job_advisor.handle_job_query(
             query=search_query.rstrip(", "),
             user_profile=user_profile
@@ -89,6 +83,7 @@ async def search_jobs(
         }
 
     except Exception as e:
+        logger.error(f"[JobRouter] 처리 중 오류 발생: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"채용정보 검색 중 오류가 발생했습니다: {str(e)}"
@@ -96,9 +91,8 @@ async def search_jobs(
 
 @router.get("/locations")
 async def get_locations():
-    """지역 정보 조회 API"""
+    """지역 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
-        # 시/도 및 구/군 정보 반환
         locations = {
             "서울": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", 
                    "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구",
@@ -109,6 +103,7 @@ async def get_locations():
         }
         return locations
     except Exception as e:
+        logger.error(f"[JobRouter] 지역 정보 조회 중 오류: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"지역 정보 조회 중 오류가 발생했습니다: {str(e)}"
@@ -116,7 +111,7 @@ async def get_locations():
 
 @router.get("/job-types")
 async def get_job_types():
-    """직종 정보 조회 API"""
+    """직종 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
         job_types = [
             "사무·회계", "영업·판매", "서비스", "생산·건설", 
@@ -124,6 +119,7 @@ async def get_job_types():
         ]
         return job_types
     except Exception as e:
+        logger.error(f"[JobRouter] 직종 정보 조회 중 오류: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"직종 정보 조회 중 오류가 발생했습니다: {str(e)}"
