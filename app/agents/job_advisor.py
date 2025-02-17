@@ -14,10 +14,9 @@ from app.agents.chat_agent import ChatAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
 from app.services.document_filter import DocumentFilter
+from app.utils.constants import LOCATIONS, AREA_CODES, SEOUL_DISTRICT_CODES, JOB_SYNONYMS
 
 logger = logging.getLogger(__name__)
-
-
 
 ###############################################################################
 # AgentState
@@ -120,7 +119,7 @@ class JobAdvisorAgent:
             # 1. 먼저 사전을 이용한 직접 매칭 시도
             extracted_info = {"지역": "", "직무": "", "연령대": ""}
             
-            # 지역 매칭
+            # 지역 매칭 - constants.py의 LOCATIONS 사용
             for location in LOCATIONS:
                 if location in user_message:
                     extracted_info["지역"] = location
@@ -545,3 +544,20 @@ class JobAdvisorAgent:
     #             "type": "training",
     #             "user_profile": user_profile
     #         }
+
+    def _extract_location(self, query: str) -> Tuple[str, str]:
+        """쿼리에서 지역 정보를 추출합니다."""
+        try:
+            # 시/도 추출
+            for location in LOCATIONS:
+                if location in query:
+                    # 서울인 경우 구 정보도 확인
+                    if location == "서울":
+                        for district in SEOUL_DISTRICT_CODES.keys():
+                            if district in query:
+                                return location, district
+                    return location, ""
+            return "", ""
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 지역 정보 추출 중 에러: {str(e)}")
+            return "", ""
