@@ -61,7 +61,10 @@ Thought: {agent_scratchpad}
 
 시작하세요!
 
-중요: 도구 실행 결과를 받으면 바로 Final Answer로 반환하세요."""
+중요: 
+1. 도구를 사용할 때는 Action과 Action Input만 출력하세요.
+2. 도구 실행 결과를 받으면 'Final Answer:'로 시작하는 최종 답변만 출력하세요.
+3. Action과 Final Answer를 동시에 출력하지 마세요."""
 
     # PromptTemplate으로 변환
     prompt = PromptTemplate.from_template(react_template)
