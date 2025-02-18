@@ -4,10 +4,11 @@ import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting, TrainingCourse
 
 from db.database import db
+from db.routes_auth import get_user_info_by_cookie
+from db.routes_chat import add_chat_message
 from bson import ObjectId
 from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.chat_agent import ChatAgent
-
 
 import os
 import json
@@ -52,25 +53,12 @@ async def chat(
             logger.error("[ChatRouter] DB 연결 없음")
             raise Exception("DB connection is None")
 
-        # 쿠키 체크
-        _id = request.cookies.get("sjgid")
-        logger.info(f"[ChatRouter] 쿠키 ID: {_id}")
-        
-        # 쿠키가 없는 경우에도 기본 응답을 반환
-        if not _id:
-            logger.warning("[ChatRouter] 쿠키에 사용자 ID 없음 - 기본 응답 반환")
-            return ChatResponse(
-                message=chat_request.user_message,
-                jobPostings=[],
-                trainingCourses=[],
-                type="info",
-                user_profile=chat_request.user_profile or {}
-            )
-
-        # 사용자 조회
-        user = await db.users.find_one({"_id": ObjectId(_id)})
-        if not user:
-            logger.warning(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id} - 기본 응답 반환")
+        # 쿠키에서 사용자 정보 조회
+        user = None
+        try:
+            user = await get_user_info_by_cookie(request)
+        except:
+            logger.error(f"[ChatRouter] 쿠키에서 사용자 정보 조회 중 오류 발생 - 기본 응답 반환")
             return ChatResponse(
                 message=chat_request.user_message,
                 jobPostings=[],
@@ -144,30 +132,12 @@ async def chat(
                 response["message"] = f"30만원 이하의 저렴한 훈련과정 {len(filtered_courses)}개를 찾았습니다."
             else:
                 response["message"] = "죄송합니다. 조건에 맞는 저렴한 훈련과정을 찾지 못했습니다."
-        
+
         # 메시지 저장
         try:
-            chat_index = len(chat_history)
-
-            user_message = {
-                "role": "user",
-                "content": chat_request.user_message,
-                "index": chat_index
-            }
-
-            bot_message = {
-                "role": "bot",
-                "content": response.get("message", ""),
-                "index": chat_index + 1
-            }
-
-            await db.users.update_one(
-                {"_id": ObjectId(_id)}, 
-                {"$push": {"messages": {"$each": [user_message, bot_message]}}}
-            )
+            await add_chat_message(user, chat_request.user_message, response.get("message", ""))
             logger.info("[ChatRouter] 메시지 저장 완료")
-            
-        except Exception as db_error:
+        except:
             logger.error("[ChatRouter] 메시지 저장 중 에러", exc_info=True)
             # 메시지 저장 실패는 치명적이지 않으므로 계속 진행
 

@@ -27,6 +27,12 @@ def set_cookie(response: Response, id: str, provider: str):
     response.set_cookie(key="sjgid", value=id, max_age=max_age)
     response.set_cookie(key="sjgpr", value=provider, max_age=max_age)
 
+def get_cookie(request: Request):
+    _id = request.cookies.get("sjgid")
+    provider = request.cookies.get("sjgpr")
+    return _id, provider
+
+# 쿠키 확인
 @router.get("/check")
 async def check_cookie(request: Request) -> bool:
     try:
@@ -37,6 +43,16 @@ async def check_cookie(request: Request) -> bool:
         return user is not None
     except:
         return False
+
+# 쿠키 확인 후 사용자 정보 반환
+@router.get("/user/cookie")
+async def get_user_info_by_cookie(request: Request) -> UserModel:
+    _id, provider = get_cookie(request)
+    user = await db.users.find_one({"_id": ObjectId(_id), "provider": provider})
+    if user:
+        return user
+    else:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 # 사용자 회원가입 (Signup)
 @router.post("/signup")
