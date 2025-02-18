@@ -43,8 +43,10 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         logger.info(f"[ChatRouter] 요청 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")
         
-        # 워크플로우 초기화
-        workflow = build_flow_graph()
+
+        # 워크플로우 생성
+        workflow = build_flow_graph(llm=request.app.state.llm)
+        
         
         # DB 체크
         if db is None:
@@ -70,52 +72,43 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         user = await db.users.find_one({"_id": ObjectId(_id)})
         if not user:
             logger.warning(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id} - 기본 응답 반환")
+        
+        # configurable 설정
+        config = {
+            "configurable": {
+                "thread_id": str(_id),  # 사용자 ID 또는 기본값
+                "checkpoint_ns": "chat",  # 네임스페이스
+                "checkpoint_id": f"chat_{int(time.time())}"  # 타임스탬프 기반 ID
+            }
+        }
+
         # 초기 상태 설정
         initial_state = FlowState(
             query=chat_request.user_message,
             chat_history=request.cookies.get("chat_history", ""),
-            user_profile=chat_request.user_profile or {}
+            user_profile=chat_request.user_profile or {},
+            agent_type="",
+            agent_reason="",
+            tool_response=None,
+            final_response={},
+            error_message="",
+            jobPostings=[],
+            trainingCourses=[],
+            messages=[]
         )
-        
+
+
         # 워크플로우 실행
-        final_state_dict = workflow.invoke(initial_state)
+        final_state_dict = workflow.stream(
+            initial_state, 
+            {"configurable": {"thread_id": str(_id)}},
+            stream_mode="values")
         logger.info(f"[ChatRouter] 워크플로우 결과: {final_state_dict}")
         
-        # 결과 변환
-        if "error" in final_state_dict:
-            return ChatResponse(
-                message=str(final_state_dict.get("error", "알 수 없는 오류가 발생했습니다.")),
-                type="error",
-                jobPostings=[],
-                trainingCourses=[],
-                user_profile=chat_request.user_profile or {}
-            )
-            
-        # Tool의 응답 처리
-        messages = final_state_dict.get("messages", [])
-        tool_response = ""
-        
-        # 마지막 메시지에서 응답 추출
-        if messages:
-            last_message = messages[-1]
-            if hasattr(last_message, 'content') and last_message.content:
-                tool_response = last_message.content
-            elif hasattr(last_message, 'additional_kwargs'):
-                # function_call 결과가 있는 경우
-                tool_response = last_message.additional_kwargs.get("function_call", {}).get("arguments", "")
-        
-        # 응답이 JSON 문자열인 경우 파싱
-        try:
-            if tool_response.startswith("{") and tool_response.endswith("}"):
-                response_dict = json.loads(tool_response)
-                tool_response = response_dict.get("message", tool_response)
-        except:
-            pass
-        
-        # 최종 응답 생성
+        # 최종 응답 변환
         response = ChatResponse(
-            message=tool_response or "응답을 생성할 수 없습니다.",
-            type=final_state_dict.get("agent_type", "info"),
+            message=final_state_dict.get("final_response", {}).get("message", ""),
+            type=final_state_dict.get("agent_type", "chat"),
             jobPostings=final_state_dict.get("jobPostings", []),
             trainingCourses=final_state_dict.get("trainingCourses", []),
             user_profile=chat_request.user_profile or {}
@@ -127,11 +120,11 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
     except Exception as e:
         logger.error(f"[ChatRouter] 처리 중 오류: {str(e)}", exc_info=True)
         return ChatResponse(
-            message="요청 처리 중 오류가 발생했습니다.",
+            message="죄송합니다. 응답 처리 중 문제가 발생했습니다.",
             type="error",
             jobPostings=[],
             trainingCourses=[],
-            user_profile={}
+            user_profile=chat_request.user_profile or {}
         )
 
 # 훈련정보 검색 엔드포인트 추가

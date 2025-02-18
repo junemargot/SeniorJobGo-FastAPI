@@ -16,7 +16,7 @@ from app.core.prompts import EXTRACT_INFO_PROMPT
 from db import database_initialize, database_shutdown
 from app.routes import userInform_router
 from app.routes import training_router
-from app.agents.sueprvisor_agent import SupervisorAgent
+from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.chat_agent import ChatAgent
 
 
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
         app.state.llm = llm  # 앱 상태에 저장
         
         # JobAdvisor 에이전트 초기화
-        app.state.supervisor = SupervisorAgent(llm, JobAdvisorAgent, TrainingAdvisorAgent, ChatAgent)
+        app.state.supervisor = SupervisorAgent(llm)
 
         # TrainingAdvisor 에이전트 초기화 (추가)
         app.state.training_advisor_agent = TrainingAdvisorAgent(llm)

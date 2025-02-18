@@ -2,6 +2,9 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Message(BaseModel):
     role: str
@@ -16,6 +19,7 @@ class FlowState(BaseModel):
 
     # 에이전트 상태
     agent_type: str = ""         # "job" / "training" / "general"
+    agent_reason: str = ""       # 에이전트 선택 이유
     
     # Tool 실행 결과
     tool_response: Optional[Dict[str, Any]] = None
@@ -35,26 +39,44 @@ class FlowState(BaseModel):
         """메시지를 상태에 추가"""
         if isinstance(message, (HumanMessage, SystemMessage, AIMessage)):
             self.messages.append(message)
+            logger.debug(f"메시지 추가됨: {message.type} - {message.content[:50]}...")
 
     def get_messages(self) -> List[BaseMessage]:
-        """메시지 리스트 반환"""
+        """전체 메시지 리스트 반환"""
+        if not self.messages:
+            return [HumanMessage(content=self.query)]
         return self.messages
 
     def get_tool_input(self) -> List[BaseMessage]:
         """ToolNode를 위한 메시지 리스트 반환"""
-        # 기본 메시지 준비
-        messages = []
-        ai_message = None
+        if not self.messages:
+            return [HumanMessage(content=self.query)]
         
-        # 메시지 분류 및 재구성
+        # 필요한 메시지만 필터링
+        filtered_messages = []
         for msg in self.messages:
-            if isinstance(msg, AIMessage):
-                ai_message = msg  # 마지막 AI 메시지 저장
-            elif isinstance(msg, HumanMessage):
-                messages.append(msg)
-        
-        # AI 메시지가 있으면 마지막에 추가
-        if ai_message:
-            messages.append(ai_message)
+            if isinstance(msg, HumanMessage):
+                filtered_messages.append(msg)
+            elif isinstance(msg, AIMessage) and msg.additional_kwargs.get("function_call"):
+                filtered_messages.append(msg)
             
-        return messages
+        return filtered_messages
+
+    def get_input_messages(self) -> List[BaseMessage]:
+        """ToolNode를 위한 입력 메시지 리스트 반환"""
+        if not self.messages:
+            # 메시지가 없는 경우 기본 메시지 생성
+            return [
+                HumanMessage(content=self.query)
+            ]
+        return self.messages
+
+    def get_chat_history(self) -> str:
+        """대화 이력을 문자열로 반환"""
+        history = []
+        for msg in self.messages:
+            if isinstance(msg, HumanMessage):
+                history.append(f"User: {msg.content}")
+            elif isinstance(msg, AIMessage):
+                history.append(f"Assistant: {msg.content}")
+        return "\n".join(history)
