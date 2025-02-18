@@ -135,23 +135,23 @@ class ChatAgent:
     async def handle_general_conversation(self, query: str, chat_history: str = None) -> Dict:
         """일반적인 대화를 처리합니다."""
         try:
-            # 이력서 관련 키워드 체크
-            resume_keywords = ["이력서", "자기소개서", "자소서", "이력서 작성", "이력서 쓰는 법"]
-            if any(keyword in query for keyword in resume_keywords):
-                # 이력서 가이드 프롬프트 사용
-                from app.core.prompts import RESUME_GUIDE_PROMPT
-                from langchain_core.output_parsers import StrOutputParser
+            # # 이력서 관련 키워드 체크
+            # resume_keywords = ["이력서", "자기소개서", "자소서", "이력서 작성", "이력서 쓰는 법"]
+            # if any(keyword in query for keyword in resume_keywords):
+            #     # 이력서 가이드 프롬프트 사용
+            #     from app.core.prompts import RESUME_GUIDE_PROMPT
+            #     from langchain_core.output_parsers import StrOutputParser
                 
-                resume_chain = RESUME_GUIDE_PROMPT | self.llm | StrOutputParser()
-                response = resume_chain.invoke({
-                    "query": query,
-                    "chat_history": chat_history if chat_history else ""
-                })
+            #     resume_chain = RESUME_GUIDE_PROMPT | self.llm | StrOutputParser()
+            #     response = resume_chain.invoke({
+            #         "query": query,
+            #         "chat_history": chat_history if chat_history else ""
+            #     })
                 
-                return {
-                    "message": response.strip(),
-                    "type": "general"
-                }
+            #     return {
+            #         "message": response.strip(),
+            #         "type": "general"
+            #     }
 
             # 일반 대화 처리
             chat_response = await self.chat(query, chat_history)

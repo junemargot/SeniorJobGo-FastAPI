@@ -7,30 +7,35 @@ from app.agents.chat_agent import ChatAgent
 from app.models.flow_state import FlowState
 from app.services.vector_store_search import VectorStoreSearch
 from app.services.vector_store_ingest import VectorStoreIngest
+import json
+import logging
 
+logger = logging.getLogger(__name__)
 
 # 미리 JobAdvisorAgent를 초기화해둠 (DI 또는 싱글턴)
 ################################################
 # job_advisor_tool
 ################################################
-@tool
-def job_advisor_tool_func(state: FlowState) -> FlowState:
-    """JobAdvisorAgent를 위한 Tool 함수"""
+@tool("job_advisor_tool")
+def job_advisor_tool_func(query: str) -> str:
+    """채용 정보 검색 / JobAdvisorAgent를 통해 사용자 질의를 처리합니다."""
     try:
         vector_search = VectorStoreSearch(vectorstore=VectorStoreIngest().setup_vector_store())
         response = JobAdvisorAgent.handle_sync_chat(
-            query=state.query,
-            user_profile=state.user_profile,
-            chat_history=state.chat_history,
+            query=query,
             vector_search=vector_search
         )
-        
-        state.jobPostings = response.get("jobPostings", [])
-        state.final_response = response
-        return state
+        logger.info(f"[JobAdvisorTool] 응답 생성: {response}")
+        return json.dumps(response)
     except Exception as e:
-        state.error_message = f"채용정보 검색 중 오류 발생: {str(e)}"
-        return state
+        error_response = {
+            "message": f"채용정보 검색 중 오류 발생: {str(e)}",
+            "type": "error",
+            "jobPostings": [],
+            "error": str(e)
+        }
+        logger.error(f"[JobAdvisorTool] 오류: {error_response}")
+        return json.dumps(error_response)
 
 job_advisor_tool = Tool(
     name="job_advisor_tool",
@@ -42,21 +47,19 @@ job_advisor_tool = Tool(
 ################################################
 # training_advisor_tool
 ################################################
-@tool
-def training_advisor_tool_func(state: FlowState) -> FlowState:
-    """TrainingAdvisorAgent를 위한 Tool 함수"""
+@tool("training_advisor_tool")
+def training_advisor_tool_func(query: str) -> str:
+    """훈련 정보 검색 / TrainingAdvisorAgent를 통해 질의를 처리"""
     try:
         response = TrainingAdvisorAgent.search_training_courses(
-            query=state.query,
-            user_profile=state.user_profile
+            query=query
         )
-        
-        state.trainingCourses = response.get("trainingCourses", [])
-        state.final_response = response
-        return state
+        return json.dumps(response)  # 전체 응답을 JSON으로 반환
     except Exception as e:
-        state.error_message = f"훈련과정 검색 중 오류 발생: {str(e)}"
-        return state
+        return json.dumps({
+            "message": f"훈련과정 검색 중 오류 발생: {str(e)}",
+            "type": "error"
+        })
 
 training_advisor_tool = Tool(
     name="training_advisor_tool",
@@ -67,20 +70,31 @@ training_advisor_tool = Tool(
 ################################################
 # chat_agent_tool
 ################################################
-@tool
-def chat_agent_tool_func(state: FlowState) -> FlowState:
-    """ChatAgent를 위한 Tool 함수"""
+@tool("chat_agent_tool")
+def chat_agent_tool_func(query: str) -> str:
+    """일반 대화를 처리합니다"""
     try:
         response = ChatAgent.handle_general_conversation(
-            query=state.query,
-            chat_history=state.chat_history
+            query=query
         )
+        logger.info(f"[ChatAgentTool] 응답 생성: {response}")
         
-        state.final_response = response
-        return state
+        # 응답이 딕셔너리가 아닌 경우 변환
+        if not isinstance(response, dict):
+            response = {
+                "message": str(response),
+                "type": "general"
+            }
+            
+        return json.dumps(response)
+        
     except Exception as e:
-        state.error_message = f"일반 대화 처리 중 오류 발생: {str(e)}"
-        return state
+        error_response = {
+            "message": f"일반 대화 처리 중 오류 발생: {str(e)}",
+            "type": "error"
+        }
+        logger.error(f"[ChatAgentTool] 오류: {error_response}")
+        return json.dumps(error_response)
 
 chat_agent_tool = Tool(
     name="chat_agent_tool",

@@ -56,31 +56,25 @@ class SupervisorAgent:
         """키워드 포함 여부 확인"""
         return any(keyword in text.lower() for keyword in keywords)
 
-    def _determine_agent_type(self, query: str, chat_history: str = "") -> str:
-        """규칙 기반으로 에이전트 타입 결정"""
-        # 채용 관련 키워드
-        job_keywords = ["채용", "일자리", "구직", "취업", "면접", "이력서", "자기소개서", 
-                       "연봉", "급여", "직장", "회사", "구인", "알바", "아르바이트"]
-        
-        # 훈련 관련 키워드
-        training_keywords = ["훈련", "교육", "과정", "학원", "자격증", "수업", "강의", 
-                           "배우고", "공부", "수강", "교육비", "훈련비", "내일배움카드"]
-
-        if self._contains_keywords(query, job_keywords):
-            return "job"
-        elif self._contains_keywords(query, training_keywords):
-            return "training"
-        
-        # LLM 기반 판단
+    @staticmethod
+    def determine_agent_type(query: str, chat_history: str = "") -> str:
+        """에이전트 타입 결정 (정적 메서드로 변경)"""
         try:
-            selection = self.agent_selector.invoke({
-                "query": query,
-                "chat_history": chat_history
-            })
-            result = self._parse_agent_selection(selection)
-            return result.get("agent", "general")
+            # 규칙 기반 키워드 체크
+            job_keywords = ["일자리", "채용", "구인", "취업", "직장", "알바"]
+            training_keywords = ["훈련", "교육", "과정", "학원", "자격증"]
+            
+            query = query.lower()
+            
+            if any(keyword in query for keyword in job_keywords):
+                return "job"
+            if any(keyword in query for keyword in training_keywords):
+                return "training"
+            
+            return "general"
+            
         except Exception as e:
-            logger.error(f"LLM 기반 에이전트 선택 실패: {str(e)}")
+            logger.error(f"[SupervisorAgent] 에이전트 타입 결정 중 오류: {str(e)}")
             return "general"
 
     async def process_query(self, query: str, user_profile: Optional[Dict] = None, 
@@ -88,7 +82,7 @@ class SupervisorAgent:
         """사용자 쿼리 처리"""
         try:
             # 에이전트 타입 결정
-            agent_type = self._determine_agent_type(query, chat_history)
+            agent_type = self.determine_agent_type(query, chat_history)
             logger.info(f"[SupervisorAgent] 선택된 에이전트 타입: {agent_type}")
             
             # 에이전트별 처리
