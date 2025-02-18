@@ -41,11 +41,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         logger.info("="*50)
         logger.info("[ChatRouter] 새로운 채팅 요청 시작")
         logger.info(f"[ChatRouter] 요청 메시지: {chat_request.user_message}")
-        logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")
-        
-
-        # 워크플로우 생성
-        workflow = build_flow_graph(llm=request.app.state.llm)
+        logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")    
         
         
         # DB 체크
@@ -94,26 +90,40 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             error_message="",
             jobPostings=[],
             trainingCourses=[],
-            messages=[]
+            messages=[],
+            supervisor=request.app.state.supervisor  # Supervisor 인스턴스 전달
         )
 
+        # 워크플로우 생성
+        workflow = await build_flow_graph(llm=request.app.state.llm)
 
         # 워크플로우 실행
-        final_state_dict = workflow.stream(
-            initial_state, 
-            {"configurable": {"thread_id": str(_id)}},
-            stream_mode="values")
-        logger.info(f"[ChatRouter] 워크플로우 결과: {final_state_dict}")
-        
-        # 최종 응답 변환
-        response = ChatResponse(
-            message=final_state_dict.get("final_response", {}).get("message", ""),
-            type=final_state_dict.get("agent_type", "chat"),
-            jobPostings=final_state_dict.get("jobPostings", []),
-            trainingCourses=final_state_dict.get("trainingCourses", []),
-            user_profile=chat_request.user_profile or {}
+        final_state = await workflow.ainvoke(
+            initial_state,
+            {"configurable": {"thread_id": str(_id)}}
         )
         
+        logger.info(f"[ChatRouter] 워크플로우 결과 - State: {final_state}")
+        
+        # AddableValuesDict -> dict 변환
+        if hasattr(final_state, "value"):
+            final_state = final_state.value
+            
+        # 최종 응답 변환
+        try:
+            response = ChatResponse(
+                message=final_state.get("final_response", {}).get("message", ""),
+                type=final_state.get("final_response", {}).get("type", "chat"),
+                jobPostings=final_state.get("jobPostings", []),
+                trainingCourses=final_state.get("trainingCourses", []),
+                user_profile=chat_request.user_profile or {}
+            )
+        except Exception as parse_error:
+            logger.error(f"[ChatRouter] 응답 변환 중 오류: {str(parse_error)}")
+            logger.error(f"[ChatRouter] final_state 타입: {type(final_state)}")
+            logger.error(f"[ChatRouter] final_state 내용: {final_state}")
+            raise
+            
         logger.info(f"[ChatRouter] 최종 응답: {response}")
         return response
         
