@@ -54,15 +54,11 @@ async def lifespan(app: FastAPI):
         )
         app.state.llm = llm  # 앱 상태에 저장
         
-        # JobAdvisor 에이전트 초기화
+        # 에이전트 초기화
         app.state.supervisor = SupervisorAgent(llm)
         app.state.job_advisor = JobAdvisorAgent(llm, vector_search)
-
-        # TrainingAdvisor 에이전트 초기화 (추가)
-        app.state.training_advisor_agent = TrainingAdvisorAgent(llm)
-
-        # ChatAgent 에이전트 초기화 (추가)
-        app.state.chat_agent = ChatAgent(llm)
+        app.state.training_advisor = TrainingAdvisorAgent(llm)
+        app.state.chat_agent = ChatAgent(llm)  # ChatAgent 추가
 
         logger.info("LLM과 에이전트 초기화 완료")
 

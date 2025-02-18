@@ -63,8 +63,9 @@ Thought: {agent_scratchpad}
 
 중요: 
 1. 도구를 사용할 때는 Action과 Action Input만 출력하세요.
-2. 도구 실행 결과를 받으면 'Final Answer:'로 시작하는 최종 답변만 출력하세요.
-3. Action과 Final Answer를 동시에 출력하지 마세요."""
+2. 도구 실행 결과를 받으면 반드시 'Final Answer:'로 시작하는 최종 답변을 출력하세요.
+3. 도구 실행 결과가 오류인 경우에도 'Final Answer:'로 시작하는 답변을 출력하세요.
+4. 도구 실행 결과를 받은 후 다른 도구를 호출하지 마세요."""
 
     # PromptTemplate으로 변환
     prompt = PromptTemplate.from_template(react_template)
@@ -74,7 +75,7 @@ Thought: {agent_scratchpad}
         llm=llm,
         tools=tools,
         prompt=prompt,
-        stop_sequence=False  # 중간에 멈추지 않도록
+        stop_sequence=["Final Answer:"]  # Final Answer에서 멈추도록
     )
 
     # AgentExecutor로 감싸서 반환
@@ -82,7 +83,7 @@ Thought: {agent_scratchpad}
         agent=react_agent,
         tools=tools,
         handle_parsing_errors=True,
-        max_iterations=3,  # 반복 횟수 제한
+        max_iterations=2,  # 반복 횟수 더 제한
         max_execution_time=None,  # 시간 제한 제거
         early_stopping_method="force",  # generate -> force로 변경
         return_intermediate_steps=True,  # 중간 단계 결과 반환
@@ -162,12 +163,14 @@ async def job_advisor_tool_func(input_str: str) -> str:
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):
+            # type을 job으로 통일
+            response["type"] = "job"
             return json.dumps(response, ensure_ascii=False)
             
         # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "chat",
+            "type": "job",  # job으로 통일
             "jobPostings": []
         }, ensure_ascii=False)
         
@@ -206,7 +209,7 @@ async def training_advisor_tool_func(input_str: str) -> str:
         training_advisor = app.state.training_advisor
         
         # await를 사용하여 비동기 함수 호출
-        response = await training_advisor.chat(query, user_profile)
+        response = await training_advisor.search_training_courses(query, user_profile)
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):

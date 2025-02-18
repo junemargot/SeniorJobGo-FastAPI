@@ -30,26 +30,35 @@ async def supervisor_node(state: FlowState):
                 # 중간 단계 결과 확인
                 for step in result.get("intermediate_steps", []):
                     if isinstance(step[0], AgentAction):
-                        if step[0].tool == "chat_agent_tool":
-                            try:
-                                chat_result = json.loads(step[1])
-                                state.final_response = {
-                                    "message": chat_result.get("message", ""),
-                                    "type": "chat"
-                                }
-                                break
-                            except json.JSONDecodeError:
-                                # 문자열 응답인 경우
-                                state.final_response = {
-                                    "message": step[1],
-                                    "type": "chat"
-                                }
-                                break
+                        try:
+                            tool_result = json.loads(step[1])
+                            # jobPosting도 포함하도록 수정
+                            if tool_result.get("type") in ["job", "jobPosting", "training", "chat", "error"]:
+                                # jobPostings와 trainingCourses 저장
+                                state.jobPostings = tool_result.get("jobPostings", [])
+                                state.trainingCourses = tool_result.get("trainingCourses", [])
                                 
-                # 최종 출력이 있는 경우
-                if "output" in result:
+                                state.final_response = {
+                                    "message": tool_result.get("message", ""),
+                                    "type": tool_result.get("type", "chat"),
+                                    "jobPostings": state.jobPostings,  # 저장된 값 사용
+                                    "trainingCourses": state.trainingCourses  # 저장된 값 사용
+                                }
+                                logger.info(f"[SupervisorNode] 도구 실행 결과: {tool_result}")
+                                logger.info(f"[SupervisorNode] 채용정보 수: {len(state.jobPostings)}")
+                                return state  # 도구 실행 결과가 있으면 바로 반환
+                        except json.JSONDecodeError:
+                            # 문자열 응답인 경우
+                            state.final_response = {
+                                "message": step[1],
+                                "type": "chat"
+                            }
+                            return state  # 문자열 응답도 바로 반환
+                            
+                # 최종 출력이 있는 경우 (도구 실행 결과가 없을 때만)
+                if "output" in result and not state.final_response:
                     output = result["output"]
-                    if isinstance(output, str) and not state.final_response:
+                    if isinstance(output, str):
                         state.final_response = {
                             "message": output,
                             "type": "chat"
