@@ -60,7 +60,7 @@ class VectorStoreIngest:
 
 
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=100,
+            chunk_size=200,
             chunk_overlap=20
         )
         self._collection = None
@@ -141,6 +141,17 @@ class VectorStoreIngest:
             return ""
         return re.sub(r"<[^>]+>", "", text).replace("\n", " ").strip()
 
+    def _simplify_metadata(self, metadata: dict) -> dict:
+        """복잡한 메타데이터를 Chroma에서 지원하는 단순한 형식으로 변환합니다."""
+        simplified_metadata = {}
+        for key, value in metadata.items():
+            if isinstance(value, (dict, list)):
+                # 딕셔너리나 리스트를 JSON 문자열로 변환
+                simplified_metadata[key] = json.dumps(value, ensure_ascii=False)
+            else:
+                simplified_metadata[key] = value
+        return simplified_metadata
+
     def _prepare_documents(self, data: dict) -> Tuple[List[Document], List[str]]:
         """jobs.json -> Document 리스트 변환, NER 수행"""
         documents = []
@@ -152,6 +163,7 @@ class VectorStoreIngest:
             company_name = self._clean_text(item.get("회사명", ""))
             work_location = self._clean_text(item.get("근무지역", ""))
             salary_condition = self._clean_text(item.get("급여조건", ""))
+            job_posting_url = self._clean_text(item.get("채용공고URL", ""))
 
             details = item.get("상세정보", {})
             job_description = ""
@@ -181,6 +193,8 @@ class VectorStoreIngest:
             ner_data = {}
             try:
                 ner_data = self._perform_ner(combined_text)
+                # NER 결과 단순화
+                ner_data = self._simplify_metadata(ner_data)
             except Exception as e:
                 logger.warning(f"[{posting_id}] NER invoke fail: {e}")
             
@@ -190,20 +204,25 @@ class VectorStoreIngest:
                 doc_id = f"{posting_id}_chunk{idx_chunk}_{hash(chunk_text[:50])}"
                 doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', doc_id)
                 
+                chunk_metadata = {
+                    "채용공고ID": posting_id,
+                    "채용제목": job_title,
+                    "회사명": company_name,
+                    "근무지역": work_location,
+                    "급여조건": salary_condition,
+                    "직무내용": job_description,
+                    "세부요건": requirements_text,
+                    "채용공고URL": job_posting_url,
+                    "chunk_index": idx_chunk,
+                    "unique_id": doc_id
+                }
+                # 메타데이터 단순화
+                chunk_metadata.update(ner_data)
+                chunk_metadata = self._simplify_metadata(chunk_metadata)
+                
                 doc = Document(
                     page_content=chunk_text,
-                    metadata={
-                        "채용공고ID": posting_id,
-                        "채용제목": job_title,
-                        "회사명": company_name,
-                        "근무지역": work_location,
-                        "급여조건": salary_condition,
-                        "직무내용": job_description,
-                        "세부요건": requirements_text,
-                        "LLM_NER": json.dumps(ner_data, ensure_ascii=False),
-                        "chunk_index": idx_chunk,
-                        "unique_id": doc_id
-                    }
+                    metadata=chunk_metadata
                 )
                 documents.append(doc)
                 doc_ids.append(doc_id)
@@ -233,11 +252,30 @@ class VectorStoreIngest:
                 "- 회사명\n"
                 "- 근무 지역\n"
                 "- 연령대\n"
-                "- 경력 요구 사항\n"
-                "- 학력 요건\n"
-                "- 급여 정보\n"
-                "- 고용 형태\n"
-                "- 복리후생\n\n"
+                "- 경력조건\n"
+                "- 학력\n"
+                "- 고용형태\n"
+                "- 모집인원\n"
+                "- 장애인 채용인원\n"
+                "- 근무예정지\n"
+                "- 모집직종\n"
+                "- 직종키워드\n"
+                "- 임금조건\n"
+                "- 근무시간\n"
+                "- 근무형태\n"
+                "- 사회보험\n"
+                "- 퇴직급여\n"
+                "- 근무 지역\n"
+                "- 접수마감일\n"
+                "- 전형방법\n"
+                "- 접수방법\n"
+                "- 제출서류\n"
+                "- 전화번호\n"
+                "- 휴대폰번호\n"
+                "- 팩스번호\n"
+                "- 이메일\n"
+                "- 채용공고 등록일시\n\n"
+                             
                 "채용 공고:\n{text}\n\n"
                 "채용 공고 내에 없는 정보는 비워두거나 적절한 방식으로 처리하고, "
                 "위 정보를 JSON으로만 응답해줘."
