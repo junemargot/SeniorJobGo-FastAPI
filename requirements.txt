@@ -15,6 +15,7 @@ chromadb
 tiktoken
 python-dotenv
 nest_asyncio
+xmltodict
 
 motor
 pymongo
