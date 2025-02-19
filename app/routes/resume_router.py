@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException, Depends
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from app.agents.resume_advisor import ResumeAdvisorAgent, ResumeResponse
 from app.database.mongodb import get_database
 from pydantic import BaseModel
@@ -8,12 +8,6 @@ from app.models.schemas import ResumeRequest, ResumeData, Education, Experience
 import logging
 from typing import Dict
 import pdfkit  # pip install pdfkit
-import platform
-import os
-import tempfile
-import asyncio
-import base64
-from pathlib import Path
 
 router = APIRouter(tags=["resume"])
 logger = logging.getLogger(__name__)
@@ -244,255 +238,97 @@ async def preview_resume(resume_id: str):
     pass
 
 
-# 비동기 background 함수 정의
-async def remove_file(path: str):
+@router.post("/resume/download/{resume_id}")
+async def download_resume(
+    resume_id: str,
+    resume_data: dict,
+    resume_advisor: ResumeAdvisorAgent = Depends(get_resume_advisor_agent),
+):
     try:
-        os.unlink(path)
-    except Exception as e:
-        logger.error(f"임시 파일 삭제 중 오류: {str(e)}")
-
-
-# wkhtmltopdf 경로 설정 함수 추가
-def get_wkhtmltopdf_path():
-    if platform.system() == "Windows":
-        return "C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"
-    else:
-        return "/usr/local/bin/wkhtmltopdf"  # Linux/Mac 경로
-
-
-@router.get("/resume/download/{resume_id}")
-async def download_resume(resume_id: str, db=Depends(get_database)):
-    try:
-        # 절대 경로로 폰트 파일 경로 설정
-        font_path = Path("C:/Users/psm25/Documents/dev1/react/src/assets/fonts/public/static")
-        
-        # 폰트 파일들을 base64로 인코딩 (otf 파일 사용)
-        def get_font_base64(font_file):
-            try:
-                with open(font_path / font_file, "rb") as f:
-                    return base64.b64encode(f.read()).decode()
-            except Exception as e:
-                logger.error(f"폰트 파일 로드 중 오류: {str(e)}, 파일: {font_path / font_file}")
-                raise
-
-        # 데이터베이스에서 이력서 데이터 가져오기 (임시로 하드코딩된 데이터 사용)
+        # 입력된 데이터로 ResumeData 객체 생성
         resume_data = ResumeData(
-            name="홍길동",
-            email="hong@example.com",
-            phone="010-1234-5678",
+            name=resume_data.get("name", ""),
+            email=resume_data.get("email", ""),
+            phone=resume_data.get("phone", ""),
+            contact=resume_data.get("phone", ""),
             education=[
                 Education(
-                    school="서울대학교",
-                    major="경영학과",
-                    degree="학사",
-                    year=1990
+                    school=resume_data.get("education", ""), major="", degree="", year=0
                 )
             ],
             experience=[
                 Experience(
-                    company="ABC 회사",
-                    position="영업부",
-                    period="5년",
-                    description="영업 관리 및 고객 관리 담당"
-                ),
-                Experience(
-                    company="XYZ 기업",
-                    position="마케팅팀",
-                    period="3년",
-                    description="마케팅 전략 수립 및 실행"
+                    company=resume_data.get("experience", {}).get("company", ""),
+                    position="",
+                    period="",
+                    description=resume_data.get("experience", {}).get(
+                        "description", ""
+                    ),
                 )
             ],
-            desired_job="영업/마케팅 관리자",
-            skills="MS Office, 영어회화 능통, 운전면허",
-            additional_info="성실하고 책임감 있는 자세로 업무에 임하겠습니다."
+            desired_job=resume_data.get("desired_job", ""),
+            skills=resume_data.get("skills", ""),
+            additional_info=resume_data.get("intro", ""),
         )
 
-        # HTML 템플릿 생성
-        html_content = f"""
+        # HTML 이력서 생성
+        html_content = await resume_advisor.create_resume_template(resume_data)
+
+        # HTML에 Pretendard 폰트 설정 추가
+        html_with_font = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>이력서</title>
             <style>
                 @font-face {{
                     font-family: 'Pretendard';
-                    src: url(data:font/otf;base64,{get_font_base64('Pretendard-Regular.otf')}) format('opentype');
+                    src: url('C:/Users/psm25/Documents/dev/react/src/assets/fonts/public/static/Pretendard-Regular.woff2') format('woff2');
                     font-weight: 400;
                     font-style: normal;
                 }}
-                
-                @font-face {{
-                    font-family: 'Pretendard';
-                    src: url(data:font/otf;base64,{get_font_base64('Pretendard-Medium.otf')}) format('opentype');
-                    font-weight: 500;
-                    font-style: normal;
-                }}
-                
-                @font-face {{
-                    font-family: 'Pretendard';
-                    src: url(data:font/otf;base64,{get_font_base64('Pretendard-Bold.otf')}) format('opentype');
-                    font-weight: 700;
-                    font-style: normal;
-                }}
-                
                 body {{
-                    font-family: 'Pretendard', sans-serif;
-                    font-weight: 400;
-                    line-height: 1.6;
-                    margin: 40px;
-                    -webkit-font-smoothing: antialiased;
-                    -moz-osx-font-smoothing: grayscale;
-                }}
-                
-                h1, h2, .company-name {{
-                    font-family: 'Pretendard', sans-serif;
-                    font-weight: 700;
-                }}
-                
-                .label {{
-                    font-family: 'Pretendard', sans-serif;
-                    font-weight: 500;
-                }}
-                
-                h1 {{
-                    text-align: center;
-                    color: #333;
-                    margin-bottom: 30px;
-                }}
-                h2 {{
-                    color: #2c3e50;
-                    border-bottom: 2px solid #3498db;
-                    padding-bottom: 5px;
-                    margin-top: 25px;
-                }}
-                .section {{
-                    margin-bottom: 25px;
-                }}
-                .info-row {{
-                    display: flex;
-                    margin-bottom: 10px;
-                }}
-                .content {{
-                    flex: 1;
-                }}
-                .experience-item {{
-                    margin-bottom: 15px;
-                }}
-                .period {{
-                    color: #666;
-                    font-size: 0.9em;
-                }}
-                .description {{
-                    margin-top: 5px;
-                    color: #555;
+                    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
                 }}
             </style>
         </head>
         <body>
-            <h1>이력서</h1>
-            <div class="section">
-                <h2>기본 정보</h2>
-                <div class="info-row">
-                    <span class="label">이름:</span>
-                    <span class="content">{resume_data.name}</span>
-                </div>
-                <div class="info-row">
-                    <span class="label">연락처:</span>
-                    <span class="content">{resume_data.phone}</span>
-                </div>
-                <div class="info-row">
-                    <span class="label">이메일:</span>
-                    <span class="content">{resume_data.email}</span>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h2>학력 사항</h2>
-                {''.join([f"""
-                <div class="experience-item">
-                    <div class="company-name">{edu.school} {edu.major}</div>
-                    <div class="period">{edu.degree}, {edu.year}</div>
-                </div>
-                """ for edu in resume_data.education])}
-            </div>
-            
-            <div class="section">
-                <h2>경력 사항</h2>
-                {''.join([f"""
-                <div class="experience-item">
-                    <div class="company-name">{exp.company} {exp.position}</div>
-                    <div class="period">{exp.period}</div>
-                    <div class="description">{exp.description}</div>
-                </div>
-                """ for exp in resume_data.experience])}
-            </div>
-
-            <div class="section">
-                <h2>희망직무</h2>
-                <div class="info-row">
-                    <span class="content">{resume_data.desired_job}</span>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>보유기술 및 자격</h2>
-                <div class="info-row">
-                    <span class="content">{resume_data.skills}</span>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>자기소개서</h2>
-                <div class="info-row">
-                    <span class="content">{resume_data.additional_info}</span>
-                </div>
-            </div>
+            {html_content}
         </body>
         </html>
         """
 
-        # PDF 생성 및 나머지 로직
-        config = pdfkit.configuration(wkhtmltopdf=get_wkhtmltopdf_path())
-        pdf = pdfkit.from_string(
-            html_content,
-            False,
-            configuration=config,
-            options={
-                "encoding": "UTF-8",
-                "page-size": "A4",
-                "margin-top": "0.75in",
-                "margin-right": "0.75in",
-                "margin-bottom": "0.75in",
-                "margin-left": "0.75in",
-                "enable-local-file-access": True,
-                "disable-smart-shrinking": True,
-                # 한글 폰트 설정
-                "javascript-delay": "1000",
-                "no-stop-slow-scripts": True,
-                "enable-external-links": True,
-                "enable-internal-links": True,
-            },
+        # PDF 생성 옵션 수정
+        config = pdfkit.configuration(
+            wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"  # 설치 경로 확인 필요
         )
 
-        # 임시 파일 생성 및 응답
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(pdf)
-            temp_path = tmp.name
+        options = {
+            "encoding": "UTF-8",
+            "page-size": "A4",
+            "margin-top": "0.75in",
+            "margin-right": "0.75in",
+            "margin-bottom": "0.75in",
+            "margin-left": "0.75in",
+            "enable-local-file-access": True,
+            "load-error-handling": "ignore",
+            "load-media-error-handling": "ignore",
+        }
 
-        return FileResponse(
-            temp_path,
+        pdf = pdfkit.from_string(
+            html_with_font, False, configuration=config, options=options  # config 추가
+        )
+
+        return Response(
+            content=pdf,
             media_type="application/pdf",
-            filename=f"이력서_{resume_id}.pdf",
-            background=lambda: asyncio.create_task(remove_file(temp_path)),
+            headers={
+                "Content-Disposition": f"attachment; filename=resume_{resume_id}.pdf"
+            },
         )
 
     except Exception as e:
         logger.error(f"이력서 다운로드 중 오류: {str(e)}")
-        try:
-            os.unlink(temp_path)
-        except:
-            pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -503,38 +339,21 @@ class ResumeEditRequest(BaseModel):
 
 @router.post("/resume/edit")
 async def edit_resume(
-    request: ResumeEditRequest,  # 요청 데이터 모델 사용
+    request: ResumeEditRequest,
     resume_advisor: ResumeAdvisorAgent = Depends(get_resume_advisor_agent),
 ):
     try:
-        # 임시로 하드코딩된 데이터 사용
+        # 빈 이력서 데이터로 시작
         resume_data = ResumeData(
-            name="홍길동",
-            email="hong@example.com",
-            phone="010-1234-5678",
-            contact="010-1234-5678",
-            education=[
-                Education(
-                    school="서울대학교", major="경영학과", degree="학사", year=1990
-                )
-            ],
-            experience=[
-                Experience(
-                    company="ABC 회사",
-                    position="영업부",
-                    period="5년",
-                    description="영업 관리 및 고객 관리 담당",
-                ),
-                Experience(
-                    company="XYZ 기업",
-                    position="마케팅팀",
-                    period="3년",
-                    description="마케팅 전략 수립 및 실행",
-                ),
-            ],
-            desired_job="영업/마케팅 관리자",
-            skills="MS Office, 영어회화 능통, 운전면허",
-            additional_info="성실하고 책임감 있는 자세로 업무에 임하겠습니다.",
+            name="",
+            email="",
+            phone="",
+            contact="",
+            education=[],
+            experience=[],
+            desired_job="",
+            skills="",
+            additional_info="",
         )
 
         html_content = await resume_advisor.create_resume_template(
@@ -543,12 +362,9 @@ async def edit_resume(
 
         return {
             "message": "이력서 수정 모드입니다.",
-            "type": "resume_advisor",
             "html_content": html_content,
             "resume_data": resume_data.dict(),
-            "suggestions": ["저장하기", "취소"],
         }
     except Exception as e:
         logger.error(f"이력서 수정 중 오류: {str(e)}")
-        logger.exception(e)
         raise HTTPException(status_code=500, detail=str(e))

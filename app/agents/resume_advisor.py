@@ -197,99 +197,132 @@ class ResumeAdvisorAgent:
         self, resume_data: ResumeData, edit_mode: bool = False
     ) -> str:
         try:
-            intro_content = (
-                resume_data.additional_info
-                if resume_data.additional_info
-                else "성실하고 책임감 있는 자세로 업무에 임하겠습니다."
-            )
-
-            # 수정 모드일 때의 스타일 추가
-            edit_styles = (
-                """
-input, textarea {
-    width: 100%;
-    padding: 4px 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    font-family: 'Malgun Gothic', sans-serif;
-}
-textarea {
-    min-height: 60px;
-    resize: vertical;
-}
-.edit-form {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-"""
-                if edit_mode
-                else ""
-            )
-
             html_template = f"""<!DOCTYPE html>
-<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>이력서 - {resume_data.name}</title><style>
-body {{padding:10px;max-width:800px;margin:0 auto;font-family:'Malgun Gothic',sans-serif}}
-.resume-container {{border:1px solid #eee;padding:12px;border-radius:8px}}
-h1 {{font-size:20px;text-align:center;margin:3px 0 10px}}
-.resume-section {{margin-bottom:4px}}
-h3 {{font-size:15px;color:#2c3e50;border-bottom:1px solid #eee;padding-bottom:2px;margin:5px 0}}
-table {{width:100%;border-collapse:collapse;margin-bottom:6px}}
-th,td {{padding:5px;border:1px solid #eee;font-size:14px}}
-th {{background-color:#f8f9fa;width:20%}}
-p {{margin:2px 0;line-height:1.3;font-size:14px}}
-.education-item,.experience-item {{margin-bottom:3px}}
-{edit_styles}
-</style></head>
-<body><div class="resume-container">
-<h1>이력서</h1>
-{"<form class='edit-form' onsubmit='return false;'>" if edit_mode else ""}
-<div class="resume-section"><h3>기본 정보</h3>
-<table><tr>
-<th>이름</th><td>{"<input type='text' value='" + resume_data.name + "'>" if edit_mode else resume_data.name}</td>
-<th>이메일</th><td>{"<input type='email' value='" + resume_data.email + "'>" if edit_mode else resume_data.email}</td>
-</tr><tr>
-<th>연락처</th><td colspan="3">{"<input type='tel' value='" + resume_data.phone + "'>" if edit_mode else resume_data.phone}</td>
-</tr></table></div>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>이력서</title>
+    <style>
+        body {{ padding: 20px; font-family: 'Pretendard', sans-serif; }}
+        h1 {{ text-align: center; margin-bottom: 40px; }}
+        h3 {{ color: #2D3748; border-bottom: 2px solid #4299E1; padding-bottom: 5px; margin-top: 30px; }}
+        .resume-section {{ margin-bottom: 25px; }}
+        input, textarea {{ width: 100%; padding: 8px; margin: 4px 0; border: 1px solid #E2E8F0; border-radius: 4px; }}
+        textarea {{ min-height: 100px; resize: vertical; }}
+        .info-row {{ display: flex; margin-bottom: 10px; }}
+        .info-label {{ width: 80px; font-weight: bold; color: #4A5568; }}
+        .button-container {{ margin-top: 20px; }}
+        .experience-item {{ margin-bottom: 15px; }}
+        .company-info {{ font-weight: bold; margin-bottom: 5px; }}
+        .job-description {{ color: #4A5568; }}
+    </style>
+</head>
+<body>
+<div class="resume-container">
+    <h1>이력서</h1>
 
-<div class="resume-section"><h3>학력사항</h3>
-{
-    ''.join([f"<div class='education-item'><p>" + 
-    ("<input type='text' value='" if edit_mode else "<strong>") +
-    f"{edu.school}" +
-    ("'>" if edit_mode else "</strong>") +
-    f" {edu.major} ({edu.degree}, {edu.year})</p></div>"
-    for edu in resume_data.education])
-}</div>
+    <div class="resume-section">
+        <h3>기본 정보</h3>
+        <div class="info-row">
+            <div class="info-label">이름:</div>
+            <div>{"<input type='text' placeholder='이름을 입력하세요'>" if edit_mode else resume_data.name}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">연락처:</div>
+            <div>{"<input type='tel' placeholder='연락처를 입력하세요'>" if edit_mode else resume_data.phone}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">이메일:</div>
+            <div>{"<input type='email' placeholder='이메일을 입력하세요'>" if edit_mode else resume_data.email}</div>
+        </div>
+    </div>
 
-<div class="resume-section"><h3>경력사항</h3>
-{
-    ''.join([f"<div class='experience-item'><p>" +
-    ("<input type='text' value='" if edit_mode else "<strong>") +
-    f"{exp.company} - {exp.position} ({exp.period})" +
-    ("'>" if edit_mode else "</strong>") +
-    "</p><p>" +
-    (f"<textarea>{exp.description}</textarea>" if edit_mode else exp.description) +
-    "</p></div>"
-    for exp in resume_data.experience])
-}</div>
+    <div class="resume-section">
+        <h3>학력 사항</h3>
+        {"<input type='text' placeholder='학교/전공/학위/졸업연도를 입력하세요'>" if edit_mode else 
+        '<div>' + '<br>'.join([f"{edu.school} {edu.major}" for edu in resume_data.education]) + '</div>'}
+    </div>
 
-<div class="resume-section"><h3>희망직무</h3>
-<p>{"<input type='text' value='" + resume_data.desired_job + "'>" if edit_mode else resume_data.desired_job}</p></div>
+    <div class="resume-section">
+        <h3>경력 사항</h3>
+        {"<div class='experience-item'><input type='text' placeholder='회사명/직위/기간을 입력하세요'><textarea placeholder='업무 내용을 입력하세요'></textarea></div>" if edit_mode else 
+        '<div>' + '<br>'.join([f"<div class='experience-item'><div class='company-info'>{exp.company} {exp.position} {exp.period}</div><div class='job-description'>{exp.description}</div></div>" for exp in resume_data.experience]) + '</div>'}
+    </div>
 
-<div class="resume-section"><h3>보유기술 및 자격</h3>
-<p>{"<input type='text' value='" + resume_data.skills + "'>" if edit_mode else resume_data.skills}</p></div>
+    <div class="resume-section">
+        <h3>희망직무</h3>
+        {"<input type='text' placeholder='희망하는 직무를 입력하세요'>" if edit_mode else resume_data.desired_job}
+    </div>
 
-<div class="resume-section"><h3>자기소개서</h3>
-<div class="intro-section"><p class="intro-text">
-{"<textarea>" + intro_content + "</textarea>" if edit_mode else intro_content}
-</p></div></div>
-{"<div class='button-container' style='display:flex;flex-direction:column;gap:5px'>" if edit_mode else ""}
-{"<button type='button' onclick='window.parent.postMessage(\"download\", \"*\")' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%'>이력서 다운로드</button>" if edit_mode else ""}
-{"<button type='button' onclick='window.parent.postMessage(\"cancel\", \"*\")' style='padding:8px;background:#f1f3f5;color:#495057;border:none;border-radius:4px;cursor:pointer;width:100%'>취소</button>" if edit_mode else ""}
-{"</div>" if edit_mode else ""}
+    <div class="resume-section">
+        <h3>보유기술 및 자격</h3>
+        {"<input type='text' placeholder='보유한 기술이나 자격증을 입력하세요'>" if edit_mode else resume_data.skills}
+    </div>
+
+    <div class="resume-section">
+        <h3>자기소개서</h3>
+        {"<textarea placeholder='자기소개서를 입력하세요'></textarea>" if edit_mode else resume_data.additional_info}
+    </div>
+
+    {"<div class='button-container' style='display:flex;flex-direction:column;gap:5px'>" if edit_mode else ""}
+    {"<button type='button' onclick='downloadResume()' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%'>이력서 다운로드</button>" if edit_mode else ""}
+    {"<button type='button' onclick='window.close()' style='padding:8px;background:#f8f9fa;color:#212529;border:none;border-radius:4px;cursor:pointer;width:100%'>취소</button>" if edit_mode else ""}
+    {"</div>" if edit_mode else ""}
+
+    <script>
+    {'''
+    function downloadResume() {
+        const API_BASE_URL = 'http://localhost:8000/api/v1';
+        
+        const getValue = (selector, defaultValue = '') => {
+            const element = document.querySelector(selector);
+            return element ? element.value : defaultValue;
+        };
+
+        const formData = {
+            name: getValue('input[placeholder="이름을 입력하세요"]'),
+            email: getValue('input[placeholder="이메일을 입력하세요"]'),
+            phone: getValue('input[placeholder="연락처를 입력하세요"]'),
+            education: getValue('input[placeholder="학교/전공/학위/졸업연도를 입력하세요"]'),
+            experience: {
+                company: getValue('input[placeholder="회사명/직위/기간을 입력하세요"]'),
+                description: getValue('textarea[placeholder="업무 내용을 입력하세요"]')
+            },
+            desired_job: getValue('input[placeholder="희망하는 직무를 입력하세요"]'),
+            skills: getValue('input[placeholder="보유한 기술이나 자격증을 입력하세요"]'),
+            intro: getValue('textarea[placeholder="자기소개서를 입력하세요"]')
+        };
+
+        fetch(`${API_BASE_URL}/resume/download/temp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('PDF 생성 실패');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `이력서_${new Date().getTime()}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            console.error('다운로드 오류:', error);
+            alert('이력서 다운로드 중 오류가 발생했습니다.');
+        });
+    }
+    '''}
+    </script>
 </div></body></html>"""
             return html_template
 
