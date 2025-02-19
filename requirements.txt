@@ -14,6 +14,10 @@ beautifulsoup4
 selenium
 tavily-python
 langchain-openai
+nest_asyncio
+xmltodict
+
+motor
 pymongo
 langgraph
 langchain-deepseek
