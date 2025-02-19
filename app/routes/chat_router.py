@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting, TrainingCourse
@@ -13,10 +14,20 @@ from app.agents.chat_agent import ChatAgent
 import os
 import json
 import time
+from typing import Optional, Dict, Any
+from app.agents.policy_agent import query_policy_agent
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 정책 검색 요청 모델 정의
+class PolicySearchRequest(BaseModel):
+    """정책 검색 요청 모델"""
+    user_message: str
+    user_profile: Dict = {}
+    session_id: Optional[str] = None
 
 # 이전 대화 내용을 저장할 딕셔너리
 conversation_history = {}
@@ -360,4 +371,19 @@ async def search_training(
     except Exception as e:
         logger.error(f"Training search error: {str(e)}")
         logger.error("상세 에러:", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+# policy
+@router.post("/policy/search")
+async def search_policies(request: PolicySearchRequest):
+    try:
+        logger.info(f"[PolicySearch] 정책 검색 요청: {request.user_message}")
+        result = query_policy_agent(request.user_message)
+        logger.info(f"[PolicySearch] 검색 결과: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"[PolicySearch] 오류 발생: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="정책 검색 중 오류가 발생했습니다."
+        )
