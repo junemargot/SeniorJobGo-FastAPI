@@ -10,7 +10,7 @@ def register_routes(app: FastAPI):
         from .userInform_router import router as userInform_router
         from .training_router import router as training_router
 
-        app.include_router(chat_router, prefix="/api/v1/chat")
+        app.include_router(chat_router, prefix="/api/v1")
         app.include_router(userInform_router)
         app.include_router(training_router)
     except Exception as e:
