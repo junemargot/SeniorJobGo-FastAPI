@@ -506,44 +506,44 @@ class JobAdvisorAgent:
                 "user_profile": user_profile
             }
 
-    # def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
-    #     """훈련과정 목록에서 중복된 과정을 제거합니다."""
-    #     unique_courses = {}
-    #     for course in courses:
-    #         course_id = course.get('id')
-    #         if course_id not in unique_courses:
-    #             unique_courses[course_id] = course
-    #     return list(unique_courses.values())
+    def _deduplicate_training_courses(self, courses: List[Dict]) -> List[Dict]:
+        """훈련과정 목록에서 중복된 과정을 제거합니다."""
+        unique_courses = {}
+        for course in courses:
+            course_id = course.get('id')
+            if course_id not in unique_courses:
+                unique_courses[course_id] = course
+        return list(unique_courses.values())
 
-    # async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
-    #     """훈련과정 관련 질의 처리"""
-    #     try:
-    #         # 기존 training_agent 인스턴스 재사용
-    #         training_results = await self.training_agent.search_training_courses(query, user_profile)
+    async def handle_training_query(self, query: str, user_profile: Dict) -> Dict:
+        """훈련과정 관련 질의 처리"""
+        try:
+            # 기존 training_agent 인스턴스 재사용
+            training_results = await self.training_agent.search_training_courses(query, user_profile)
             
-    #         # 중복 제거
-    #         if training_results.get('trainingCourses'):
-    #             training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
+            # 중복 제거
+            if training_results.get('trainingCourses'):
+                training_results['trainingCourses'] = self._deduplicate_training_courses(training_results['trainingCourses'])
                 
-    #             # 훈련 과정에 대한 전문적인 설명 생성
-    #             courses = training_results['trainingCourses']
-    #             training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
-    #             training_explanation = training_explanation_chain.invoke({
-    #                 "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in courses]}"
-    #             })
+                # 훈련 과정에 대한 전문적인 설명 생성
+                courses = training_results['trainingCourses']
+                training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
+                training_explanation = training_explanation_chain.invoke({
+                    "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in courses]}"
+                })
                 
-    #             training_results['message'] = training_explanation.strip()
+                training_results['message'] = training_explanation.strip()
             
-    #         return training_results
+            return training_results
 
-    #     except Exception as e:
-    #         logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
-    #         return {
-    #             "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
-    #             "trainingCourses": [],
-    #             "type": "training",
-    #             "user_profile": user_profile
-    #         }
+        except Exception as e:
+            logger.error(f"[JobAdvisor] 훈련과정 검색 중 오류: {str(e)}")
+            return {
+                "message": "죄송합니다. 훈련과정 검색 중 오류가 발생했습니다.",
+                "trainingCourses": [],
+                "type": "training",
+                "user_profile": user_profile
+            }
 
     def _extract_location(self, query: str) -> Tuple[str, str]:
         """쿼리에서 지역 정보를 추출합니다."""

@@ -7,7 +7,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from work24.training_collector import TrainingCollector
-from work24.common_codes import CommonCodeCollector, CommonCodeType
+from work24.common_codes import CommonCodeCollector, WORK24_COMMON_URL, WORK24_TRAINING_COMMON_API_KEY
 from app.core.prompts import EXTRACT_INFO_PROMPT
 from app.services.document_filter import DocumentFilter
 from app.utils.constants import AREA_CODES, SEOUL_DISTRICT_CODES, INTEREST_NCS_MAPPING
@@ -26,7 +26,10 @@ class TrainingAdvisorAgent:
         self.llm = llm
         self.collector = TrainingCollector()
         self.document_filter = DocumentFilter()
-        self.code_collector = CommonCodeCollector()
+        self.code_collector = CommonCodeCollector(
+            api_key=WORK24_TRAINING_COMMON_API_KEY,
+            base_url=WORK24_COMMON_URL
+        )
         
         # constants.py에서 정의된 코드 사용
         self.area_codes = AREA_CODES

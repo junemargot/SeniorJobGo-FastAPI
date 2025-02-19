@@ -107,7 +107,7 @@ class TrainingCollector:
             "srchNcs1": "",                        # NCS 직종 대분류
             "srchNcs2": "",                        # NCS 직종 중분류
             "srchNcs3": "",                        # NCS 직종 소분류
-            "crseTracseSe": "C0061",              # 훈련유형 (C0061: 국민내일배움카드)
+            "crseTracseSe": "",  # 빈 문자열로 설정하여 모든 훈련유형 검색
             "srchTraGbn": "",                      # 훈련구분코드
             "srchTraType": "",                     # 훈련종류
             "srchTraProcessNm": "",                # 훈련과정명
@@ -146,7 +146,6 @@ class TrainingCollector:
         
         data = self._make_api_request(url, default_params)
         if data and isinstance(data, dict):
-            # API 응답 구조에 맞게 처리
             if "srchList" in data and "scn_list" in data["srchList"]:
                 return data["srchList"]["scn_list"]
             elif "srchList" in data:

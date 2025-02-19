@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
     # shutdown
     logger.info("서버를 종료합니다...")
 
-# FastAPI 앱 생성 시 lifespan 설정
+# FastAPI 앱 생성
 app = FastAPI(lifespan=lifespan)
 
 # CORS 설정
@@ -91,8 +91,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(userInform_router.router)
-app.include_router(training_router.router)
+
+# 모든 라우터에 공통 prefix (/api/v1) 추가
+
+app.include_router(userInform_router.router, prefix="/api/v1")
+app.include_router(training_router.router, prefix="/api/v1")
 
 def signal_handler(sig, frame):
     """
