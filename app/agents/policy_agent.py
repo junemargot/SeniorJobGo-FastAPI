@@ -1,13 +1,16 @@
-from langchain_openai import ChatOpenAI
+# langchain 관련 모듈
 from langchain.agents import Tool, AgentExecutor, create_react_agent
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_community.tools.tavily_search import TavilySearchResults
-from typing import Dict, List
-import os
-from dotenv import load_dotenv
+
+# 표준 라이브러리
 import logging
-from functools import partial
+import os
 import re
+from dotenv import load_dotenv
+from functools import partial
+from typing import Dict, List
 
 # 로깅 설정 보완
 logging.basicConfig(
@@ -26,7 +29,7 @@ logger.info("환경변수 로드 완료")
 
 # OpenAI 및 Tavily 설정
 llm = ChatOpenAI(
-    model="gpt-4-turbo-preview",
+    model="gpt-4o-mini",
     temperature=0
 )
 search = TavilySearchResults(
@@ -141,7 +144,7 @@ agent_executor = AgentExecutor(
     tools=tools,
     verbose=True,
     handle_parsing_errors=True,
-    max_iterations=50,
+    max_iterations=10,
     max_execution_time=600
 )
 
@@ -190,33 +193,28 @@ def extract_policy_info(content: str) -> Dict:
         # 정보 추출 및 구조화
         policy_info = {}
         
-        # 출처 추출
-        source_match = re.search(r'출처:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["출처"] = source_match.group(1).strip() if source_match else "-"
+        # 추출할 항목과 정규 표현식을 배열로 정의
+        extraction_items = [
+            "출처",
+            "제목",
+            "지원 대상",
+            "주요 내용",
+            "신청 방법",
+            "연락처",
+            "URL"
+        ]
         
-        # 제목 추출
-        title_match = re.search(r'제목:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["제목"] = title_match.group(1).strip() if title_match else "-"
-        
-        # 지원 대상 추출
-        target_match = re.search(r'지원 대상:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["지원_대상"] = target_match.group(1).strip() if target_match else "-"
-        
-        # 주요 내용 추출
-        content_match = re.search(r'주요 내용:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["주요_내용"] = content_match.group(1).strip() if content_match else "-"
-        
-        # 신청 방법 추출
-        apply_match = re.search(r'신청 방법:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["신청_방법"] = apply_match.group(1).strip() if apply_match else "-"
-        
-        # 연락처 추출
-        contact_match = re.search(r'연락처:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["연락처"] = contact_match.group(1).strip() if contact_match else "-"
-        
-        # URL 추출
-        url_match = re.search(r'URL:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["URL"] = url_match.group(1).strip() if url_match else "-"
+        # 각 항목에 대해 반복하여 정보 추출
+        for label in extraction_items:
+            # 정규 표현식에 f-string을 사용하여 동적으로 생성
+            pattern = fr'{label}:\s*(.+?)(?:\n|$)'
+
+            # 정규 표현식 검색
+            match = re.search(pattern, extracted_text, re.MULTILINE)
+
+            # 양 옆의 공백 제거 및 공백을 "_"로 대체
+            formatted_label = label.strip().replace(" ", "_")
+            policy_info[formatted_label] = match.group(1).strip() if match else "-"
 
         # 모든 값이 '-'인 경우 None 반환
         if all(value == '-' for value in policy_info.values()):
