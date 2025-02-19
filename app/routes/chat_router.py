@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi import APIRouter, Request, Response, HTTPException, Depends, Body
 from pydantic import BaseModel
 import logging
 from app.models.schemas import ChatRequest, ChatResponse, JobPosting, TrainingCourse
@@ -9,6 +9,8 @@ from db.routes_chat import add_chat_message
 from bson import ObjectId
 from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.chat_agent import ChatAgent
+from app.agents.meal_agent import MealAgent
+from app.services.data_client import PublicDataClient
 
 import os
 import json
@@ -33,6 +35,12 @@ def get_job_advisor_agent(request: Request):
 
 def get_chat_agent(request: Request, llm=Depends(get_llm)):
     return ChatAgent(llm=llm)
+
+def get_meal_agent(request: Request):
+    if not hasattr(request.app.state, "meal_agent"):
+        data_client = PublicDataClient()
+        request.app.state.meal_agent = MealAgent(data_client=data_client)
+    return request.app.state.meal_agent
 
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(
@@ -360,4 +368,62 @@ async def search_training(
     except Exception as e:
         logger.error(f"Training search error: {str(e)}")
         logger.error("상세 에러:", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 무료급식소 관련 새로운 엔드포인트들
+@router.post("/meal-agent/")
+async def handle_meal_query(
+    request: Request,
+    query: str = Body(..., embed=True),
+    meal_agent: MealAgent = Depends(get_meal_agent)
+):
+    try:
+        logger.info(f"[MealRouter] 새로운 무료급식소 검색 요청: {query}")
+        response = meal_agent.generate_response(query)
+        logger.info(f"[MealRouter] 생성된 응답: {response}")
+        
+        return {
+            "answer": response,
+            "type": "meal_service"
+        }
+    
+    except Exception as e:
+        logger.error(f"[MealRouter] 에러 발생: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail="무료급식소 검색 중 오류가 발생했습니다."
+        )
+
+@router.get("/meal-services/")
+async def get_meal_services(
+    request: Request,
+    meal_agent: MealAgent = Depends(get_meal_agent)
+):
+    """무료급식소 데이터 전체 조회"""
+    try:
+        data = meal_agent.data_client.fetch_meal_services()
+        return {"data": data}
+    except Exception as e:
+        logger.error(f"[MealRouter] 데이터 조회 중 에러: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="무료급식소 데이터 조회 중 오류가 발생했습니다."
+        )
+
+@router.get("/meal-services/{region}")
+async def get_meal_services_by_region(
+    request: Request,
+    region: str,
+    meal_agent: MealAgent = Depends(get_meal_agent)
+):
+    """특정 지역의 무료급식소 조회"""
+    try:
+        raw_data = meal_agent.data_client.fetch_meal_services()
+        filtered_data = meal_agent.data_client.filter_by_region(raw_data, region)
+        return {"filtered_data": filtered_data}
+    except Exception as e:
+        logger.error(f"[MealRouter] 지역 필터링 중 에러: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"{region} 지역의 무료급식소 조회 중 오류가 발생했습니다."
+        ) 
