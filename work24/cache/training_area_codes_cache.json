@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-02-17T05:46:38.944123",
+  "timestamp": "2025-02-19T15:48:58.398450",
   "data": {
     "00_": [
       {
@@ -59,7 +59,7 @@
       {
         "rsltCode": "42",
         "rsltCodenm": "강원",
-        "useYn": "N",
+        "useYn": "Y",
         "sortOrder": ""
       },
       {
@@ -77,7 +77,7 @@
       {
         "rsltCode": "45",
         "rsltCodenm": "전북",
-        "useYn": "N",
+        "useYn": "Y",
         "sortOrder": ""
       },
       {
@@ -101,7 +101,7 @@
       {
         "rsltCode": "49",
         "rsltCodenm": "제주",
-        "useYn": "N",
+        "useYn": "Y",
         "sortOrder": ""
       },
       {
@@ -119,6 +119,1954 @@
       {
         "rsltCode": "52",
         "rsltCodenm": "전북",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_11": [
+      {
+        "rsltCode": "11110",
+        "rsltCodenm": "종로구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11140",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11170",
+        "rsltCodenm": "용산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11200",
+        "rsltCodenm": "성동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11215",
+        "rsltCodenm": "광진구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11230",
+        "rsltCodenm": "동대문구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11260",
+        "rsltCodenm": "중랑구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11290",
+        "rsltCodenm": "성북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11305",
+        "rsltCodenm": "강북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11320",
+        "rsltCodenm": "도봉구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11350",
+        "rsltCodenm": "노원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11380",
+        "rsltCodenm": "은평구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11410",
+        "rsltCodenm": "서대문구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11440",
+        "rsltCodenm": "마포구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11470",
+        "rsltCodenm": "양천구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11500",
+        "rsltCodenm": "강서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11530",
+        "rsltCodenm": "구로구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11545",
+        "rsltCodenm": "금천구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11560",
+        "rsltCodenm": "영등포구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11590",
+        "rsltCodenm": "동작구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11620",
+        "rsltCodenm": "관악구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11650",
+        "rsltCodenm": "서초구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11680",
+        "rsltCodenm": "강남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11710",
+        "rsltCodenm": "송파구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "11740",
+        "rsltCodenm": "강동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_26": [
+      {
+        "rsltCode": "26110",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26140",
+        "rsltCodenm": "서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26170",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26200",
+        "rsltCodenm": "영도구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26230",
+        "rsltCodenm": "부산진구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26260",
+        "rsltCodenm": "동래구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26290",
+        "rsltCodenm": "남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26320",
+        "rsltCodenm": "북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26350",
+        "rsltCodenm": "해운대구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26380",
+        "rsltCodenm": "사하구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26410",
+        "rsltCodenm": "금정구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26440",
+        "rsltCodenm": "강서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26470",
+        "rsltCodenm": "연제구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26500",
+        "rsltCodenm": "수영구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26530",
+        "rsltCodenm": "사상구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "26710",
+        "rsltCodenm": "기장군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_27": [
+      {
+        "rsltCode": "27110",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27140",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27170",
+        "rsltCodenm": "서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27200",
+        "rsltCodenm": "남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27230",
+        "rsltCodenm": "북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27260",
+        "rsltCodenm": "수성구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27290",
+        "rsltCodenm": "달서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27710",
+        "rsltCodenm": "달성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "27720",
+        "rsltCodenm": "군위군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_28": [
+      {
+        "rsltCode": "28110",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28140",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28170",
+        "rsltCodenm": "남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28177",
+        "rsltCodenm": "미추홀구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28185",
+        "rsltCodenm": "연수구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28200",
+        "rsltCodenm": "남동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28237",
+        "rsltCodenm": "부평구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28245",
+        "rsltCodenm": "계양구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28260",
+        "rsltCodenm": "서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28710",
+        "rsltCodenm": "강화군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "28720",
+        "rsltCodenm": "옹진군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_29": [
+      {
+        "rsltCode": "29110",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "29140",
+        "rsltCodenm": "서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "29155",
+        "rsltCodenm": "남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "29170",
+        "rsltCodenm": "북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "29200",
+        "rsltCodenm": "광산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_30": [
+      {
+        "rsltCode": "30110",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "30140",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "30170",
+        "rsltCodenm": "서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "30200",
+        "rsltCodenm": "유성구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "30230",
+        "rsltCodenm": "대덕구",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_31": [
+      {
+        "rsltCode": "31110",
+        "rsltCodenm": "중구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "31140",
+        "rsltCodenm": "남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "31170",
+        "rsltCodenm": "동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "31200",
+        "rsltCodenm": "북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "31710",
+        "rsltCodenm": "울주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_36": [
+      {
+        "rsltCode": "36110",
+        "rsltCodenm": "세종",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_41": [
+      {
+        "rsltCode": "41110",
+        "rsltCodenm": "수원시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41111",
+        "rsltCodenm": "수원시 장안구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41113",
+        "rsltCodenm": "수원시 권선구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41115",
+        "rsltCodenm": "수원시 팔달구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41117",
+        "rsltCodenm": "수원시 영통구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41130",
+        "rsltCodenm": "성남시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41131",
+        "rsltCodenm": "성남시 수정구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41133",
+        "rsltCodenm": "성남시 중원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41135",
+        "rsltCodenm": "성남시 분당구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41150",
+        "rsltCodenm": "의정부시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41170",
+        "rsltCodenm": "안양시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41171",
+        "rsltCodenm": "안양시 만안구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41173",
+        "rsltCodenm": "안양시 동안구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41190",
+        "rsltCodenm": "부천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41192",
+        "rsltCodenm": "부천시 원미구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41194",
+        "rsltCodenm": "부천시 소사구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41195",
+        "rsltCodenm": "부천시 원미구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41196",
+        "rsltCodenm": "부천시 오정구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41197",
+        "rsltCodenm": "부천시 소사구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41199",
+        "rsltCodenm": "부천시 오정구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41210",
+        "rsltCodenm": "광명시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41220",
+        "rsltCodenm": "평택시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41250",
+        "rsltCodenm": "동두천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41270",
+        "rsltCodenm": "안산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41271",
+        "rsltCodenm": "안산시 상록구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41273",
+        "rsltCodenm": "안산시 단원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41280",
+        "rsltCodenm": "고양시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41281",
+        "rsltCodenm": "고양시 덕양구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41283",
+        "rsltCodenm": "고양시 일산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41285",
+        "rsltCodenm": "고양시 일산동구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41287",
+        "rsltCodenm": "고양시 일산서구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41290",
+        "rsltCodenm": "과천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41310",
+        "rsltCodenm": "구리시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41360",
+        "rsltCodenm": "남양주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41370",
+        "rsltCodenm": "오산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41390",
+        "rsltCodenm": "시흥시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41410",
+        "rsltCodenm": "군포시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41430",
+        "rsltCodenm": "의왕시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41450",
+        "rsltCodenm": "하남시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41460",
+        "rsltCodenm": "용인시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41461",
+        "rsltCodenm": "용인시 처인구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41463",
+        "rsltCodenm": "용인시 기흥구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41465",
+        "rsltCodenm": "용인시 수지구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41480",
+        "rsltCodenm": "파주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41500",
+        "rsltCodenm": "이천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41550",
+        "rsltCodenm": "안성시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41570",
+        "rsltCodenm": "김포시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41590",
+        "rsltCodenm": "화성시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41610",
+        "rsltCodenm": "광주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41630",
+        "rsltCodenm": "양주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41650",
+        "rsltCodenm": "포천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41670",
+        "rsltCodenm": "여주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41710",
+        "rsltCodenm": "양주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41730",
+        "rsltCodenm": "여주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41800",
+        "rsltCodenm": "연천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41810",
+        "rsltCodenm": "포천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41820",
+        "rsltCodenm": "가평군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "41830",
+        "rsltCodenm": "양평군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_42": [
+      {
+        "rsltCode": "42110",
+        "rsltCodenm": "춘천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42130",
+        "rsltCodenm": "원주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42150",
+        "rsltCodenm": "강릉시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42170",
+        "rsltCodenm": "동해시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42190",
+        "rsltCodenm": "태백시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42210",
+        "rsltCodenm": "속초시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42230",
+        "rsltCodenm": "삼척시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42720",
+        "rsltCodenm": "홍천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42730",
+        "rsltCodenm": "횡성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42750",
+        "rsltCodenm": "영월군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42760",
+        "rsltCodenm": "평창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42770",
+        "rsltCodenm": "정선군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42780",
+        "rsltCodenm": "철원군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42790",
+        "rsltCodenm": "화천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42800",
+        "rsltCodenm": "양구군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42810",
+        "rsltCodenm": "인제군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42820",
+        "rsltCodenm": "고성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "42830",
+        "rsltCodenm": "양양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_43": [
+      {
+        "rsltCode": "43110",
+        "rsltCodenm": "청주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43111",
+        "rsltCodenm": "청주시 상당구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43112",
+        "rsltCodenm": "청주시 서원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43113",
+        "rsltCodenm": "청주시 흥덕구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43114",
+        "rsltCodenm": "청주시 청원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43130",
+        "rsltCodenm": "충주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43150",
+        "rsltCodenm": "제천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43710",
+        "rsltCodenm": "청원군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43720",
+        "rsltCodenm": "보은군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43730",
+        "rsltCodenm": "옥천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43740",
+        "rsltCodenm": "영동군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43745",
+        "rsltCodenm": "증평군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43750",
+        "rsltCodenm": "진천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43760",
+        "rsltCodenm": "괴산군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43770",
+        "rsltCodenm": "음성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "43800",
+        "rsltCodenm": "단양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_44": [
+      {
+        "rsltCode": "44130",
+        "rsltCodenm": "천안시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44131",
+        "rsltCodenm": "천안시 동남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44132",
+        "rsltCodenm": "천안시 서북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44133",
+        "rsltCodenm": "천안시 서북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44150",
+        "rsltCodenm": "공주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44180",
+        "rsltCodenm": "보령시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44200",
+        "rsltCodenm": "아산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44210",
+        "rsltCodenm": "서산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44230",
+        "rsltCodenm": "논산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44250",
+        "rsltCodenm": "계룡시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44270",
+        "rsltCodenm": "당진시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44710",
+        "rsltCodenm": "금산군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44730",
+        "rsltCodenm": "연기군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44760",
+        "rsltCodenm": "부여군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44770",
+        "rsltCodenm": "서천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44790",
+        "rsltCodenm": "청양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44800",
+        "rsltCodenm": "홍성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44810",
+        "rsltCodenm": "예산군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44825",
+        "rsltCodenm": "태안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "44830",
+        "rsltCodenm": "당진군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_45": [
+      {
+        "rsltCode": "45110",
+        "rsltCodenm": "전주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45111",
+        "rsltCodenm": "전주시 완산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45113",
+        "rsltCodenm": "전주시 덕진구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45130",
+        "rsltCodenm": "군산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45140",
+        "rsltCodenm": "익산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45180",
+        "rsltCodenm": "정읍시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45190",
+        "rsltCodenm": "남원시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45210",
+        "rsltCodenm": "김제시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45710",
+        "rsltCodenm": "완주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45720",
+        "rsltCodenm": "진안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45730",
+        "rsltCodenm": "무주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45740",
+        "rsltCodenm": "장수군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45750",
+        "rsltCodenm": "임실군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45770",
+        "rsltCodenm": "순창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45790",
+        "rsltCodenm": "고창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "45800",
+        "rsltCodenm": "부안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_46": [
+      {
+        "rsltCode": "46110",
+        "rsltCodenm": "목포시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46130",
+        "rsltCodenm": "여수시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46150",
+        "rsltCodenm": "순천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46170",
+        "rsltCodenm": "나주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46230",
+        "rsltCodenm": "광양시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46710",
+        "rsltCodenm": "담양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46720",
+        "rsltCodenm": "곡성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46730",
+        "rsltCodenm": "구례군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46770",
+        "rsltCodenm": "고흥군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46780",
+        "rsltCodenm": "보성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46790",
+        "rsltCodenm": "화순군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46800",
+        "rsltCodenm": "장흥군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46810",
+        "rsltCodenm": "강진군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46820",
+        "rsltCodenm": "해남군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46830",
+        "rsltCodenm": "영암군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46840",
+        "rsltCodenm": "무안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46860",
+        "rsltCodenm": "함평군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46870",
+        "rsltCodenm": "영광군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46880",
+        "rsltCodenm": "장성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46890",
+        "rsltCodenm": "완도군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46900",
+        "rsltCodenm": "진도군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "46910",
+        "rsltCodenm": "신안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_47": [
+      {
+        "rsltCode": "47110",
+        "rsltCodenm": "포항시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47111",
+        "rsltCodenm": "포항시 남구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47113",
+        "rsltCodenm": "포항시 북구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47130",
+        "rsltCodenm": "경주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47150",
+        "rsltCodenm": "김천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47170",
+        "rsltCodenm": "안동시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47190",
+        "rsltCodenm": "구미시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47210",
+        "rsltCodenm": "영주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47230",
+        "rsltCodenm": "영천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47250",
+        "rsltCodenm": "상주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47280",
+        "rsltCodenm": "문경시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47290",
+        "rsltCodenm": "경산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47720",
+        "rsltCodenm": "군위군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47730",
+        "rsltCodenm": "의성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47750",
+        "rsltCodenm": "청송군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47760",
+        "rsltCodenm": "영양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47770",
+        "rsltCodenm": "영덕군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47820",
+        "rsltCodenm": "청도군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47830",
+        "rsltCodenm": "고령군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47840",
+        "rsltCodenm": "성주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47850",
+        "rsltCodenm": "칠곡군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47900",
+        "rsltCodenm": "예천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47920",
+        "rsltCodenm": "봉화군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47930",
+        "rsltCodenm": "울진군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "47940",
+        "rsltCodenm": "울릉군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_48": [
+      {
+        "rsltCode": "48110",
+        "rsltCodenm": "창원시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48120",
+        "rsltCodenm": "창원시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48121",
+        "rsltCodenm": "창원시 의창구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48123",
+        "rsltCodenm": "창원시 성산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48125",
+        "rsltCodenm": "창원시 마산합포구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48127",
+        "rsltCodenm": "창원시 마산회원구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48129",
+        "rsltCodenm": "창원시 진해구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48160",
+        "rsltCodenm": "마산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48170",
+        "rsltCodenm": "진주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48190",
+        "rsltCodenm": "진해시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48220",
+        "rsltCodenm": "통영시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48240",
+        "rsltCodenm": "사천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48250",
+        "rsltCodenm": "김해시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48270",
+        "rsltCodenm": "밀양시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48310",
+        "rsltCodenm": "거제시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48330",
+        "rsltCodenm": "양산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48720",
+        "rsltCodenm": "의령군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48730",
+        "rsltCodenm": "함안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48740",
+        "rsltCodenm": "창녕군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48820",
+        "rsltCodenm": "고성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48840",
+        "rsltCodenm": "남해군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48850",
+        "rsltCodenm": "하동군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48860",
+        "rsltCodenm": "산청군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48870",
+        "rsltCodenm": "함양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48880",
+        "rsltCodenm": "거창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "48890",
+        "rsltCodenm": "합천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_49": [
+      {
+        "rsltCode": "49110",
+        "rsltCodenm": "제주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "49130",
+        "rsltCodenm": "서귀포시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "49710",
+        "rsltCodenm": "북제주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "49720",
+        "rsltCodenm": "남제주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_50": [
+      {
+        "rsltCode": "50110",
+        "rsltCodenm": "제주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "50130",
+        "rsltCodenm": "서귀포시",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_51": [
+      {
+        "rsltCode": "51110",
+        "rsltCodenm": "춘천시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51130",
+        "rsltCodenm": "원주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51150",
+        "rsltCodenm": "강릉시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51170",
+        "rsltCodenm": "동해시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51190",
+        "rsltCodenm": "태백시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51210",
+        "rsltCodenm": "속초시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51230",
+        "rsltCodenm": "삼척시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51720",
+        "rsltCodenm": "홍천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51730",
+        "rsltCodenm": "횡성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51750",
+        "rsltCodenm": "영월군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51760",
+        "rsltCodenm": "평창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51770",
+        "rsltCodenm": "정선군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51780",
+        "rsltCodenm": "철원군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51790",
+        "rsltCodenm": "화천군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51800",
+        "rsltCodenm": "양구군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51810",
+        "rsltCodenm": "인제군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51820",
+        "rsltCodenm": "고성군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "51830",
+        "rsltCodenm": "양양군",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ],
+    "01_52": [
+      {
+        "rsltCode": "52110",
+        "rsltCodenm": "전주시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52111",
+        "rsltCodenm": "전주시 완산구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52113",
+        "rsltCodenm": "전주시 덕진구",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52130",
+        "rsltCodenm": "군산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52140",
+        "rsltCodenm": "익산시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52180",
+        "rsltCodenm": "정읍시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52190",
+        "rsltCodenm": "남원시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52210",
+        "rsltCodenm": "김제시",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52710",
+        "rsltCodenm": "완주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52720",
+        "rsltCodenm": "진안군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52730",
+        "rsltCodenm": "무주군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52740",
+        "rsltCodenm": "장수군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52750",
+        "rsltCodenm": "임실군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52770",
+        "rsltCodenm": "순창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52790",
+        "rsltCodenm": "고창군",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "52800",
+        "rsltCodenm": "부안군",
         "useYn": "Y",
         "sortOrder": ""
       }

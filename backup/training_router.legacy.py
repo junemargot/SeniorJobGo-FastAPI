@@ -28,12 +28,9 @@ def get_training_advisor(request: Request):
     return request.app.state.training_advisor_agent
 
 def get_common_code_collector():
-    """공통코드 수집기 인스턴스 가져오기"""
-    from work24.common_codes import CommonCodeCollector, WORK24_COMMON_URL, WORK24_TRAINING_COMMON_API_KEY
-    return CommonCodeCollector(
-        api_key=WORK24_TRAINING_COMMON_API_KEY,
-        base_url=WORK24_COMMON_URL
-    )
+    """공통코드 수집기 인스턴스 생성"""
+    from work24.common_codes import CommonCodeCollector
+    return CommonCodeCollector()  # 매개변수 없이 초기화
 
 async def search_training_courses(search_params: Dict, code_collector) -> Dict:
     """훈련과정 검색 실행 - 공통 함수"""
@@ -80,7 +77,7 @@ async def search_training_courses(search_params: Dict, code_collector) -> Dict:
         logger.error("상세 에러:", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/search")
+@router.post("/trainings/search")
 async def search_trainings(
     search_params: TrainingSearchRequest,
     training_advisor = Depends(get_training_advisor)

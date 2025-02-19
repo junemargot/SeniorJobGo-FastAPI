@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Optional, Dict
 from pydantic import BaseModel
 import logging
+from app.utils.constants import LOCATIONS, AREA_CODES, INTEREST_NCS_MAPPING  # INTEREST_NCS_MAPPING 추가
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +94,28 @@ async def search_jobs(
 async def get_locations():
     """지역 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
-        locations = {
-            "서울": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", 
-                   "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구",
-                   "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구",
-                   "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"],
-            "경기": ["수원시", "성남시", "의정부시", "안양시", "부천시", "광명시", "평택시", "동두천시"],
-            "인천": ["중구", "동구", "미추홀구", "연수구", "남동구", "부평구", "계양구", "서구"],
-        }
-        return locations
+        # LOCATIONS 리스트에서 시/도별 구/군 정보 생성
+        districts = {}
+        current_city = None
+        current_districts = []
+        
+        for location in LOCATIONS:
+            if location in AREA_CODES:  # 시/도인 경우
+                if current_city:  # 이전 시/도의 구/군 정보 저장
+                    districts[current_city] = current_districts
+                current_city = location
+                current_districts = []
+            else:  # 구/군인 경우
+                if current_city:
+                    current_districts.append(location)
+        
+        # 마지막 시/도의 구/군 정보 저장
+        if current_city and current_districts:
+            districts[current_city] = current_districts
+            
+        logger.info(f"[JobRouter] 지역 정보 반환: {districts}")
+        return districts
+        
     except Exception as e:
         logger.error(f"[JobRouter] 지역 정보 조회 중 오류: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -113,11 +127,28 @@ async def get_locations():
 async def get_job_types():
     """직종 정보 조회 API - 모달의 드롭다운 메뉴용"""
     try:
-        job_types = [
-            "사무·회계", "영업·판매", "서비스", "생산·건설", 
-            "IT·인터넷", "교육", "의료·복지", "경비·청소"
-        ]
+        # INTEREST_NCS_MAPPING에서 직종 정보 추출
+        job_types = []
+        job_type_mapping = {
+            "사무행정": "사무·회계",
+            "IT/컴퓨터": "IT·인터넷",
+            "요양보호": "의료·복지",
+            "조리/외식": "서비스",
+            "운전/운송": "운전·운송",
+            "생산/제조": "생산·건설",
+            "판매/영업": "영업·판매",
+            "건물관리": "시설관리",
+            "경비": "경비·청소"
+        }
+        
+        # INTEREST_NCS_MAPPING의 키를 job_type_mapping을 통해 변환
+        for interest in INTEREST_NCS_MAPPING.keys():
+            if interest in job_type_mapping:
+                job_types.append(job_type_mapping[interest])
+        
+        logger.info(f"[JobRouter] 직종 정보 반환: {job_types}")
         return job_types
+        
     except Exception as e:
         logger.error(f"[JobRouter] 직종 정보 조회 중 오류: {str(e)}", exc_info=True)
         raise HTTPException(

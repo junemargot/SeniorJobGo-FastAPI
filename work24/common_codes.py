@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import requests
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set
 from urllib.parse import urljoin
 from enum import Enum
 import xmltodict
@@ -88,9 +88,7 @@ class CommonCodeCollector:
         "08",  # NCS 세분류 코드 (2자리 또는 4자리)
     }
     
-    def __init__(self, api_key: str, base_url: str):
-        self.api_key = api_key
-        self.base_url = base_url
+    def __init__(self):
         self.setup_save_directory()
         self.code_caches = {
             "training_area": {},
@@ -188,185 +186,199 @@ class CommonCodeCollector:
         
         return True
     
-    def _fetch_common_codes(self, srch_type: str, srch_option1: str = "", srch_option2: str = "") -> Optional[List[Dict]]:
-        """공통코드 조회"""
-        url = urljoin(self.base_url, WORK24_TRAINING_COMMON_URL)
-        
-        params = {
-            "authKey": self.api_key,
-            "returnType": "XML",         # XML로 변경 (필수)
-            "outType": "1",             # 출력형태 (1:리스트)
-            "srchType": srch_type,      # 공통코드 구분
-            "pageNum": "1",             # 페이지번호
-            "pageSize": "999"           # 페이지당 출력건수
-        }
-        
-        # 선택적 파라미터 추가
-        if srch_option1:
-            params["srchOption1"] = srch_option1
-        if srch_option2:
-            params["srchOption2"] = srch_option2
-        
-        try:
-            print(f"\n요청 URL: {url}")
-            print(f"요청 파라미터: {json.dumps(params, ensure_ascii=False, indent=2)}")
-            
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            
-            print(f"응답 상태 코드: {response.status_code}")
-            print(f"응답 헤더: {response.headers}")
-            print(f"응답 내용: {response.text[:500]}")
-            
-            if not response.text:
-                print("응답 내용이 비어있습니다.")
-                return None
-            
-            # XML 응답을 파싱하여 딕셔너리로 변환
-            data = xmltodict.parse(response.text)
-            
-            # XML 응답 구조 확인 및 빈 리스트 처리
-            if "HRDNet" in data:
-                if "srchList" in data["HRDNet"]:
-                    # srchList가 비어있는 경우
-                    if not data["HRDNet"]["srchList"]:
-                        return []
-                        
-                    if "scn_list" in data["HRDNet"]["srchList"]:
-                        scn_list = data["HRDNet"]["srchList"]["scn_list"]
-                        if isinstance(scn_list, dict):  # 단일 항목인 경우
-                            return [scn_list]
-                        return scn_list
+    def fetch_common_codes(self, code_type: CommonCodeType, option1: str = None, option2: str = None) -> List[Dict]:
+        """공통코드 조회 (캐시 적용)"""
+        # 옵션 유효성 검사
+        if not self._validate_options(code_type, option1, option2):
             return []
             
+        # 코드 타입에 따른 캐시 타입 결정
+        if code_type in [CommonCodeType.TRAINING_AREA_LARGE, CommonCodeType.TRAINING_AREA_MEDIUM]:
+            cache_type = "training_area"
+        elif code_type in [CommonCodeType.NCS_LARGE, CommonCodeType.NCS_MEDIUM, CommonCodeType.NCS_SMALL, CommonCodeType.NCS_DETAIL]:
+            cache_type = "ncs"
+        elif code_type == CommonCodeType.TRAINING_TYPE:
+            cache_type = "training_type"
+        elif code_type == CommonCodeType.TRAINING_METHOD:
+            cache_type = "training_method"
+        elif code_type == CommonCodeType.TRAINING_ORG_TYPE:
+            cache_type = "training_org"
+        else:
+            cache_type = "training_area"  # 기본값
+            
+        # 캐시 확인
+        cached_codes = self.get_cached_codes(cache_type, code_type.value, option1)
+        if cached_codes is not None:
+            return cached_codes
+            
+        # API 호출
+        api_info = TRAINING_APIS["training_common"]
+        url = urljoin(WORK24_COMMON_URL, api_info["endpoints"]["common"])
+        
+        params = {
+            "authKey": api_info["api_key"],
+            "returnType": "XML",  # 반드시 XML로 지정
+            "outType": "1",       # 리스트 형태
+            "srchType": code_type.value,
+            "srchOption1": option1 if option1 else "",
+            "srchOption2": option2 if option2 else ""
+        }
+        
+        try:
+            print(f"\n공통코드 요청 URL: {url}")
+            print(f"공통코드 요청 파라미터: {json.dumps(params, ensure_ascii=False, indent=2)}")
+            
+            response = requests.get(url, params=params)
+            print(f"응답 상태 코드: {response.status_code}")
+            
+            if response.status_code == 200:
+                try:
+                    print(f"XML 응답 원본:\n{response.text}")
+                    # XML 응답 파싱
+                    data_dict = xmltodict.parse(response.text)
+                    print(f"XML 응답 구조: {json.dumps(data_dict, ensure_ascii=False, indent=2)}")
+                    
+                    # XML 구조 검증
+                    if not isinstance(data_dict, dict):
+                        print("XML 응답이 올바른 형식이 아닙니다.")
+                        return []
+                        
+                    # HRDNet > srchList > scn_list 구조 확인
+                    hrdnet = data_dict.get("HRDNet", {})
+                    if not isinstance(hrdnet, dict):
+                        print("HRDNet 노드가 올바른 형식이 아닙니다.")
+                        return []
+                        
+                    srch_list = hrdnet.get("srchList", {})
+                    if not isinstance(srch_list, dict):
+                        print("srchList 노드가 올바른 형식이 아닙니다.")
+                        return []
+                        
+                    scn_list = srch_list.get("scn_list", [])
+                    
+                    # 단일 항목인 경우 리스트로 변환
+                    if isinstance(scn_list, dict):
+                        scn_list = [scn_list]
+                    elif not isinstance(scn_list, list):
+                        print("scn_list가 올바른 형식이 아닙니다.")
+                        return []
+                        
+                    # 결과 변환
+                    result = []
+                    for item in scn_list:
+                        if not isinstance(item, dict):
+                            continue
+                            
+                        code_item = {
+                            "rsltCode": item.get("rsltCode", ""),
+                            "rsltCodenm": item.get("rsltName", ""),  # rsltName을 rsltCodenm으로 매핑
+                            "useYn": "Y",  # 기본값 'Y'로 설정
+                            "sortOrder": item.get("sortOrder", "")
+                        }
+                        result.append(code_item)
+                    
+                    # 결과 캐싱
+                    self.set_cached_codes(cache_type, code_type.value, result, option1)
+                    return result
+                    
+                except Exception as e:
+                    print(f"XML 파싱 실패: {str(e)}")
+                    return []
+            else:
+                print(f"API 요청 실패: {response.status_code}")
+                return []
+                
         except Exception as e:
             print(f"공통코드 조회 중 오류 발생: {str(e)}")
-            if hasattr(e, 'response'):
-                print(f"응답 상태 코드: {e.response.status_code}")
-                print(f"응답 내용: {e.response.text[:500]}")
-            return None
-            
-    def get_area_codes(self) -> Dict[str, Dict[str, str]]:
-        """지역 코드 조회"""
-        area_codes = {}
+            return []
+    
+    def get_training_areas(self) -> Dict[str, List[Dict]]:
+        """훈련지역 코드 조회"""
+        # 대분류 지역 조회
+        large_areas = self.fetch_common_codes(CommonCodeType.TRAINING_AREA_LARGE)
+        result = {"large": large_areas, "medium": {}}
         
-        # 대분류 지역 코드 조회
-        main_areas = self._fetch_common_codes("00")
-        if main_areas:
-            for area in main_areas:
-                area_code = area.get("rsltCode")    # rsltCode로 수정
-                area_name = area.get("rsltName")    # rsltName으로 수정
-                if area_code and area_name:
-                    area_codes[area_code] = {
-                        "name": area_name,
-                        "sub_areas": {}
-                    }
-                    
-                    # 중분류 지역 코드 조회
-                    sub_areas = self._fetch_common_codes("01", area_code)
-                    if sub_areas:
-                        for sub_area in sub_areas:
-                            sub_code = sub_area.get("rsltCode")    # rsltCode로 수정
-                            sub_name = sub_area.get("rsltName")    # rsltName으로 수정
-                            if sub_code and sub_name:
-                                area_codes[area_code]["sub_areas"][sub_code] = sub_name
-                                
-        return area_codes
+        # 각 대분류 지역별 중분류 지역 조회
+        for area in large_areas:
+            area_code = area["rsltCode"]  # 필드명 수정
+            medium_areas = self.fetch_common_codes(
+                CommonCodeType.TRAINING_AREA_MEDIUM,
+                option1=area_code
+            )
+            result["medium"][area_code] = medium_areas
         
-    def get_ncs_codes(self) -> Dict[str, Dict]:
+        return result
+    
+    def get_ncs_codes(self) -> Dict[str, List[Dict]]:
         """NCS 코드 조회"""
-        ncs_codes = {}
-        
         # 대분류 조회
-        main_categories = self._fetch_common_codes("05")
-        if main_categories:
-            for category in main_categories:
-                main_code = category.get("rsltCode")    # RSLT_CODE -> rsltCode
-                main_name = category.get("rsltName")    # RSLT_NAME -> rsltName
-                if main_code and main_name:
-                    ncs_codes[main_code] = {
-                        "name": main_name,
-                        "sub_categories": {}
-                    }
-                    
-                    # 중분류 조회
-                    mid_categories = self._fetch_common_codes("06", main_code)
-                    if mid_categories:
-                        for mid in mid_categories:
-                            mid_code = mid.get("rsltCode")    # RSLT_CODE -> rsltCode
-                            mid_name = mid.get("rsltName")    # RSLT_NAME -> rsltName
-                            if mid_code and mid_name:
-                                ncs_codes[main_code]["sub_categories"][mid_code] = {
-                                    "name": mid_name,
-                                    "sub_categories": {}
-                                }
-                                
-                                # 소분류 조회
-                                small_categories = self._fetch_common_codes("07", main_code, mid_code)
-                                if small_categories:
-                                    for small in small_categories:
-                                        small_code = small.get("rsltCode")    # RSLT_CODE -> rsltCode
-                                        small_name = small.get("rsltName")    # RSLT_NAME -> rsltName
-                                        if small_code and small_name:
-                                            ncs_codes[main_code]["sub_categories"][mid_code]["sub_categories"][small_code] = {
-                                                "name": small_name,
-                                                "details": {}
-                                            }
-                                            
-                                            # 세분류 조회
-                                            details = self._fetch_common_codes("08", f"{main_code}{mid_code}", small_code)
-                                            if details:
-                                                for detail in details:
-                                                    detail_code = detail.get("rsltCode")    # RSLT_CODE -> rsltCode
-                                                    detail_name = detail.get("rsltName")    # RSLT_NAME -> rsltName
-                                                    if detail_code and detail_name:
-                                                        ncs_codes[main_code]["sub_categories"][mid_code]["sub_categories"][small_code]["details"][detail_code] = detail_name
-                                                        
-        return ncs_codes
+        large_codes = self.fetch_common_codes(CommonCodeType.NCS_LARGE)
+        result = {"large": large_codes, "medium": {}, "small": {}, "detail": {}}
+        
+        # 중분류 조회
+        for large in large_codes:
+            large_code = large["rsltCode"]  # 필드명 수정
+            medium_codes = self.fetch_common_codes(
+                CommonCodeType.NCS_MEDIUM,
+                option1=large_code
+            )
+            result["medium"][large_code] = medium_codes
+            
+            # 소분류 조회
+            for medium in medium_codes:
+                medium_code = medium["rsltCode"]  # 필드명 수정
+                small_codes = self.fetch_common_codes(
+                    CommonCodeType.NCS_SMALL,
+                    option1=medium_code
+                )
+                result["small"][medium_code] = small_codes
+                
+                # 세분류 조회
+                for small in small_codes:
+                    small_code = small["rsltCode"]  # 필드명 수정
+                    detail_codes = self.fetch_common_codes(
+                        CommonCodeType.NCS_DETAIL,
+                        option1=small_code
+                    )
+                    result["detail"][small_code] = detail_codes
+        
+        return result
     
     def get_training_types(self) -> List[Dict]:
         """훈련종류 코드 조회"""
-        training_types = self._fetch_common_codes("09")
-        if training_types:
-            # 응답 데이터 구조화
-            return [{
-                "code": type_info.get("rsltCode"),
-                "name": type_info.get("rsltName"),
-                "use_yn": type_info.get("useYn", "Y")
-            } for type_info in training_types]
-        return []
+        return self.fetch_common_codes(CommonCodeType.TRAINING_TYPE)
     
     def get_training_methods(self) -> List[Dict]:
         """훈련방법 코드 조회"""
-        return self._fetch_common_codes("10")
+        return self.fetch_common_codes(CommonCodeType.TRAINING_METHOD)
     
     def get_training_org_types(self) -> List[Dict]:
         """훈련기관 구분 코드 조회"""
-        return self._fetch_common_codes("11")
+        return self.fetch_common_codes(CommonCodeType.TRAINING_ORG_TYPE)
     
     def save_all_codes(self):
         """모든 공통코드 수집 및 저장"""
         try:
             print("\n1. 훈련 지역 코드 수집 중...")
-            training_area_codes = self.get_area_codes()
+            training_area_codes = self.fetch_common_codes(CommonCodeType.TRAINING_AREA_LARGE)
             if training_area_codes:
-                self.set_cached_codes("training_area", "00", training_area_codes)
+                self.set_cached_codes("training_area", CommonCodeType.TRAINING_AREA_LARGE.value, training_area_codes)
                 print(f"훈련 지역 코드 {len(training_area_codes)}개를 저장했습니다.")
             
             print("\n2. NCS 코드 수집 중...")
-            response = self.get_ncs_codes()
+            response = self.fetch_common_codes(CommonCodeType.NCS_LARGE)
             if response:
                 ncs_codes = []
-                for category, details in response.items():
+                for item in response:
                     code_item = {
-                        "rsltCode": category,
-                        "rsltCodenm": details["name"],
-                        "useYn": "Y",
-                        "sortOrder": ""
+                        "rsltCode": item.get("rsltCode", ""),
+                        "rsltCodenm": item.get("rsltName", ""),  # rsltName 필드 사용
+                        "useYn": "Y",  # 기본값 'Y'로 설정
+                        "sortOrder": item.get("sortOrder", "")
                     }
                     ncs_codes.append(code_item)
                 
-                self.set_cached_codes("ncs", "05", ncs_codes)
+                self.set_cached_codes("ncs", "05", ncs_codes)  # 캐시 키를 "05"로 설정
                 print(f"NCS 코드 {len(ncs_codes)}개를 저장했습니다.")
             
             print("\n공통코드 수집 및 저장이 완료되었습니다.")
@@ -374,4 +386,36 @@ class CommonCodeCollector:
         except Exception as e:
             print(f"공통코드 수집 중 오류 발생: {str(e)}")
             raise
+
+    def get_area_codes(self) -> Dict[str, Dict]:
+        """지역 코드 조회"""
+        # 캐시 확인
+        cached_codes = self.get_cached_codes("training_area", "00")
+        if cached_codes:
+            # 캐시된 코드를 적절한 형식으로 변환
+            result = {}
+            for code in cached_codes:
+                if code.get("useYn") == "Y":
+                    area_code = code["rsltCode"]
+                    area_name = code["rsltCodenm"]
+                    result[area_code] = {
+                        "name": area_name,
+                        "sub_areas": {}
+                    }
+                    
+                    # 해당 지역의 중분류(구/군) 코드 조회
+                    sub_codes = self.fetch_common_codes(
+                        CommonCodeType.TRAINING_AREA_MEDIUM,
+                        option1=area_code
+                    )
+                    
+                    for sub_code in sub_codes:
+                        if sub_code.get("useYn") == "Y":
+                            sub_area_code = sub_code["rsltCode"]
+                            sub_area_name = sub_code["rsltCodenm"].replace(area_name, "").strip()
+                            result[area_code]["sub_areas"][sub_area_code] = sub_area_name
+                            
+            return result
+            
+        return {}
 

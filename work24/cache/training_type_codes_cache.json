@@ -1,0 +1,319 @@
+{
+  "timestamp": "2025-02-19T15:51:11.960496",
+  "data": {
+    "09_": [
+      {
+        "rsltCode": "C0031",
+        "rsltCodenm": "근로자직업능력개발훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0041",
+        "rsltCodenm": "사업주지원금훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0042",
+        "rsltCodenm": "국가인적자원개발컨소시엄",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0043",
+        "rsltCodenm": "근로자수강지원금훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0044",
+        "rsltCodenm": "근로자능력개발카드수강지원훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0045",
+        "rsltCodenm": "중소기업핵심직무향상훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0046",
+        "rsltCodenm": "단기직무능력향상 지원사업",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0047",
+        "rsltCodenm": "중소기업유급휴가훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0048",
+        "rsltCodenm": "근로자직무능력향상",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0049",
+        "rsltCodenm": "재직자계좌적합훈련과정",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0051",
+        "rsltCodenm": "실업자훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0052",
+        "rsltCodenm": "자활직업훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0053",
+        "rsltCodenm": "지역실업자훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0054",
+        "rsltCodenm": "국가기간전략산업직종훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0055",
+        "rsltCodenm": "실업자계좌제",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0056",
+        "rsltCodenm": "대한상공회의소",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0057",
+        "rsltCodenm": "일학습병행",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0058",
+        "rsltCodenm": "도제학교",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0059",
+        "rsltCodenm": "청년취업아카데미",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0061",
+        "rsltCodenm": "통합심사과정훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0062",
+        "rsltCodenm": "과정평가형훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0063",
+        "rsltCodenm": "IPP",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0064",
+        "rsltCodenm": "고용디딤돌",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0065",
+        "rsltCodenm": "유니테크",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0066",
+        "rsltCodenm": "지역산업맞춤형",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0067",
+        "rsltCodenm": "중장년취업아카데미",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0069",
+        "rsltCodenm": "폴리텍대학_기능사과정",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0070",
+        "rsltCodenm": "폴리텍대학_기능장과정",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0071",
+        "rsltCodenm": "폴리텍대학_신중년특화과정(단기)",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0072",
+        "rsltCodenm": "폴리텍대학_여성특별과정",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0073",
+        "rsltCodenm": "폴리텍대학_영세사업장훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0074",
+        "rsltCodenm": "장애인직업능력개발훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0075",
+        "rsltCodenm": "건설일용근로자기능향상지원",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0076",
+        "rsltCodenm": "산재근로자직업훈련 지원사업",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0077",
+        "rsltCodenm": "지역산업맞춤형일자리",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0078",
+        "rsltCodenm": "국민내일배움훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0080",
+        "rsltCodenm": "중앙부처통합훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0098",
+        "rsltCodenm": "산업계 주도 청년 맞춤형 훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0099",
+        "rsltCodenm": "스마트혼합훈련(비대면)",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0101",
+        "rsltCodenm": "운전면허훈련과정",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0102",
+        "rsltCodenm": "산업구조변화대응",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0103",
+        "rsltCodenm": "플랫폼 특화훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0104",
+        "rsltCodenm": "K-디지털 트레이닝",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0105",
+        "rsltCodenm": "K-디지털 기초역량훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0107",
+        "rsltCodenm": "산업맞춤형",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0108",
+        "rsltCodenm": "하이테크형",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0109",
+        "rsltCodenm": "아카데미형",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0201",
+        "rsltCodenm": "미래유망분야고졸인력양성훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0202",
+        "rsltCodenm": "외국인유학생",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0203",
+        "rsltCodenm": "구직자",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C0204",
+        "rsltCodenm": "특화대학",
+        "useYn": "Y",
+        "sortOrder": ""
+      },
+      {
+        "rsltCode": "C9999",
+        "rsltCodenm": "미인정훈련",
+        "useYn": "Y",
+        "sortOrder": ""
+      }
+    ]
+  }
+}

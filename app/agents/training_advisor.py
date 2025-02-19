@@ -1,16 +1,23 @@
-from typing import Dict, List, Optional
+from typing import Dict, List
 import logging
 from datetime import datetime, timedelta
 import json
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+
 from langchain_core.output_parsers import StrOutputParser
 
 from work24.training_collector import TrainingCollector
-from work24.common_codes import CommonCodeCollector, WORK24_COMMON_URL, WORK24_TRAINING_COMMON_API_KEY
-from app.core.prompts import EXTRACT_INFO_PROMPT
+from work24.common_codes import (
+    CommonCodeCollector, 
+    CommonCodeType,
+    WORK24_COMMON_URL, 
+    WORK24_TRAINING_COMMON_API_KEY
+)
+from app.core.prompts import (
+    EXTRACT_INFO_PROMPT,
+    TRAINING_EXPLANATION_PROMPT  # 새로 추가된 프롬프트 임포트
+)
 from app.services.document_filter import DocumentFilter
-from app.utils.constants import AREA_CODES, SEOUL_DISTRICT_CODES, INTEREST_NCS_MAPPING
+from app.utils.constants import SEOUL_DISTRICT_CODES, INTEREST_NCS_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -26,47 +33,117 @@ class TrainingAdvisorAgent:
         self.llm = llm
         self.collector = TrainingCollector()
         self.document_filter = DocumentFilter()
-        self.code_collector = CommonCodeCollector(
-            api_key=WORK24_TRAINING_COMMON_API_KEY,
-            base_url=WORK24_COMMON_URL
-        )
+        self.code_collector = CommonCodeCollector()
         
-        # constants.py에서 정의된 코드 사용
-        self.area_codes = AREA_CODES
-        self.area_medium_codes = SEOUL_DISTRICT_CODES
+        # 지역 코드 저장을 위한 딕셔너리 초기화
+        self.area_codes = {}  # 시/도 코드
+        self.district_codes = {}  # 구/군 코드
+        self.area_medium_codes = {}  # 중분류 코드
+        
+        # 캐시된 코드 로드
+        self._load_cached_codes()
+        
+        # NCS 매핑 초기화
         self.interest_ncs_mapping = INTEREST_NCS_MAPPING
         
-    def _initialize_area_codes(self):
-        """지역 중분류 코드 초기화"""
+    def _load_cached_codes(self):
+        """캐시된 공통코드 로드"""
         try:
-            # 서울(11) 지역의 중분류 코드 조회
-            medium_codes = self.code_collector.fetch_common_codes(
-                CommonCodeType.TRAINING_AREA_MEDIUM,
-                option1="11"  # 서울
-            )
-            
-            # 중분류 코드 매핑 생성
-            if isinstance(medium_codes, list):
-                for code in medium_codes:
-                    # XML 응답의 필드명에 맞게 수정
-                    area_name = code.get("rsltCodenm", "").strip()
-                    area_code = code.get("rsltCode", "")
-                    if area_name and area_code:
-                        # "서울" 제거 및 정규화
-                        area_name = area_name.replace("서울", "").strip()
-                        self.area_medium_codes[area_name] = area_code
-                        # 구 없는 버전도 추가 (예: "강남구" -> "강남")
-                        if area_name.endswith("구"):
-                            self.area_medium_codes[area_name[:-1]] = area_code
-                        
-                logger.info(f"[TrainingAdvisor] 지역 중분류 코드 초기화 완료: {len(self.area_medium_codes)}개")
-                logger.info(f"[TrainingAdvisor] 지역 중분류 코드: {self.area_medium_codes}")
+            # 1. 지역 코드 로드
+            area_codes = self.code_collector.get_cached_codes("training_area", "00")
+            if not area_codes:
+                # 캐시가 없는 경우에만 API 호출
+                logger.info("[TrainingAdvisor] 지역 코드 캐시 없음. API 호출...")
+                self._initialize_area_codes()
             else:
-                logger.error(f"[TrainingAdvisor] 중분류 코드 조회 실패: {medium_codes}")
+                # 캐시된 코드 사용
+                for code in area_codes:
+                    if code.get("useYn") == "Y":
+                        area_name = code["rsltCodenm"].strip()
+                        area_code = code["rsltCode"]
+                        self.area_codes[area_name] = area_code
+                        
+                        # 중분류 코드도 캐시에서 로드
+                        medium_codes = self.code_collector.get_cached_codes("training_area", "01", area_code)
+                        if medium_codes:
+                            if area_name not in self.district_codes:
+                                self.district_codes[area_name] = {}
+                                
+                            for medium_code in medium_codes:
+                                if medium_code.get("useYn") == "Y":
+                                    district_name = medium_code["rsltCodenm"].replace(area_name, "").strip()
+                                    district_code = medium_code["rsltCode"]
+                                    
+                                    # 특수문자 및 공백 처리
+                                    district_name = district_name.replace(" ", "")
+                                    
+                                    self.district_codes[area_name][district_name] = district_code
+                                    if district_name.endswith(("구", "군")):
+                                        short_name = district_name[:-1]
+                                        self.district_codes[area_name][short_name] = district_code
+            
+            logger.info(f"[TrainingAdvisor] 캐시된 지역 코드 로드 완료")
+            logger.info(f"[TrainingAdvisor] 대분류 코드: {len(self.area_codes)}개")
+            logger.info(f"[TrainingAdvisor] 중분류 코드: {sum(len(districts) for districts in self.district_codes.values())}개")
             
         except Exception as e:
+            logger.error(f"[TrainingAdvisor] 캐시된 코드 로드 중 오류: {str(e)}")
+            logger.error(f"[TrainingAdvisor] 에러 상세: ", exc_info=True)
+
+    def _initialize_area_codes(self):
+        """지역 코드 초기화 (대분류 및 중분류)"""
+        try:
+            # 1. 훈련지역 대분류 코드 조회
+            large_codes = self.code_collector.fetch_common_codes(
+                CommonCodeType.TRAINING_AREA_LARGE
+            )
+            
+            # 대분류 코드 매핑 생성 (useYn이 'Y'인 것만)
+            for code in large_codes:
+                if code.get("useYn") != "Y":
+                    continue
+                
+                # rsltName -> rsltCodenm으로 수정
+                area_name = code["rsltCodenm"].strip()
+                area_code = code["rsltCode"]
+                self.area_codes[area_name] = area_code
+                
+                # 2. 해당 대분류의 중분류 코드 조회
+                medium_codes = self.code_collector.fetch_common_codes(
+                    CommonCodeType.TRAINING_AREA_MEDIUM,
+                    option1=area_code
+                )
+                
+                # 중분류 코드 매핑 생성
+                if area_name not in self.district_codes:
+                    self.district_codes[area_name] = {}
+                    
+                for medium_code in medium_codes:
+                    if medium_code.get("useYn") != "Y":
+                        continue
+                    
+                    district_name = medium_code["rsltName"].strip()
+                    district_code = medium_code["rsltCode"]
+                    
+                    # 지역명에서 시/도 이름 제거 (예: "서울 강남구" -> "강남구")
+                    district_name = district_name.replace(area_name, "").strip()
+                    
+                    # 특수문자 및 공백 처리
+                    district_name = district_name.replace(" ", "")
+                    
+                    self.district_codes[area_name][district_name] = district_code
+                    # 구/군 없는 버전도 추가 (예: "강남구" -> "강남")
+                    if district_name.endswith(("구", "군")):
+                        short_name = district_name[:-1]
+                        self.district_codes[area_name][short_name] = district_code
+            
+            logger.info(f"[TrainingAdvisor] 지역 코드 초기화 완료")
+            logger.info(f"[TrainingAdvisor] 대분류 코드: {self.area_codes}")
+            logger.info(f"[TrainingAdvisor] 중분류 코드: {self.district_codes}")
+
+        except Exception as e:
             logger.error(f"[TrainingAdvisor] 지역 코드 초기화 중 오류: {str(e)}")
-            logger.error(f"[TrainingAdvisor] medium_codes: {medium_codes if 'medium_codes' in locals() else 'Not available'}")
+            logger.error(f"[TrainingAdvisor] 에러 상세: ", exc_info=True)
 
     ###############################################################################
     # 개체명 인식 (NER) 추출 : 훈련정보 검색 및 추천 처리
@@ -283,6 +360,40 @@ class TrainingAdvisorAgent:
     # 최종 응답 메시지 동적 생성
     # 예외 처리 및 에러 로깅
     
+    def _map_location_to_code(self, location_info: Dict[str, str]) -> List[str]:
+        """추출된 지역 정보를 HRD-Net 지역 코드로 변환"""
+        try:
+            area_codes = []
+            city = location_info.get("city", "").strip()
+            district = location_info.get("district", "").strip()
+
+            # 1. 시/도 레벨 매칭
+            if city in self.area_codes:
+                area_code = self.area_codes[city]
+                
+                # 2. 구/군 레벨 매칭
+                if district and city in self.district_codes:
+                    district_mapping = self.district_codes[city]
+                    # 구/군 이름 정규화
+                    district = district.replace(" ", "")
+                    if district in district_mapping:
+                        # 특정 구/군 코드 추가
+                        area_codes.append(district_mapping[district])
+                    else:
+                        # 구/군을 찾지 못한 경우 시/도 전체 검색
+                        area_codes.append(area_code)
+                else:
+                    # 구/군 정보가 없는 경우 시/도 전체 검색
+                    area_codes.append(area_code)
+
+            logger.info(f"[TrainingAdvisor] 지역 코드 매핑 결과: {area_codes}")
+            logger.info(f"[TrainingAdvisor] 입력 위치: city={city}, district={district}")
+            return area_codes
+
+        except Exception as e:
+            logger.error(f"[TrainingAdvisor] 지역 코드 매핑 중 오류: {str(e)}")
+            return []
+
     async def search_training_courses(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
         """훈련과정 검색 처리"""
         try:
@@ -302,11 +413,19 @@ class TrainingAdvisorAgent:
             user_ner = self._extract_ner(query, user_profile)
             logger.info(f"[TrainingAdvisor] NER 추출 결과: {user_ner}")
             
-            # 2. 검색 파라미터 구성 (user_profile 전달)
+            # 2. 지역 정보를 HRD-Net 코드로 변환
+            location_info = {
+                "city": user_ner.get("지역", "").split()[0],
+                "district": " ".join(user_ner.get("지역", "").split()[1:])
+            }
+            area_codes = self._map_location_to_code(location_info)
+            
+            # 3. 검색 파라미터 구성 (기존 로직 유지하면서 지역 코드 추가)
             search_params = self._build_search_params(user_ner, user_profile)
+            search_params["srchTraArea"] = area_codes  # 지역 코드 추가
             logger.info(f"[TrainingAdvisor] 검색 파라미터: {search_params}")
-        
-            # 3. API 호출
+            
+            # 4. API 호출 (기존 로직)
             courses = self.collector._fetch_training_list("tomorrow", search_params)
             logger.info(f"[TrainingAdvisor] API 호출 결과: {courses if courses else '결과 없음'}")
 
@@ -318,14 +437,14 @@ class TrainingAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            # 4. 결과 포맷팅 (비용순 정렬 적용)
+            # 5. 결과 포맷팅 (비용순 정렬 적용)
             training_courses = self._format_training_courses(courses, is_low_cost=is_low_cost)
             
-            # 5. 중복 제거
+            # 6. 중복 제거
             training_courses = self._deduplicate_training_courses(training_courses)
             logger.info(f"[TrainingAdvisor] 중복 제거 후 결과 수: {len(training_courses)}")
             
-            # 6. 필터링 적용
+            # 7. 필터링 적용
             filtered_courses = self.document_filter.filter_documents(training_courses)
             logger.info(f"[TrainingAdvisor] 필터링 후 결과 수: {len(filtered_courses)}")
 
@@ -337,23 +456,17 @@ class TrainingAdvisorAgent:
                     "user_profile": user_profile
                 }
 
-            # 7. 상위 5개만 선택
+            # 8. 상위 5개만 선택
             top_courses = filtered_courses[:5]
 
-            # 8. 현재 결과를 user_profile에 저장
+            # 9. 현재 결과를 user_profile에 저장
             if user_profile is not None:
                 user_profile['previous_training_results'] = top_courses
 
-            # 9. 전문적인 설명 생성
-            from app.core.prompts import chat_prompt
-            from langchain_core.output_parsers import StrOutputParser
-            
-            training_explanation_chain = chat_prompt | self.llm | StrOutputParser()
-            training_explanation = training_explanation_chain.invoke({
-                "query": f"다음 훈련과정들을 전문 직업상담사의 입장에서 설명해주세요. 각 과정의 특징과 취업 연계 가능성, 준비사항도 간략하게 설명해주세요: {[course['title'] for course in top_courses]}"
-            })
+            # 10. 전문적인 설명 생성
+            training_explanation = await self._generate_training_explanation(top_courses)
 
-            # 10. 응답 메시지 생성
+            # 11. 응답 메시지 생성
             location = user_ner.get("지역", "")
             job = user_ner.get("직무", "")
             
@@ -365,12 +478,17 @@ class TrainingAdvisorAgent:
             
             cost_message = "비용이 낮은 순으로" if is_low_cost else ""
             base_message = f"{' '.join(message_parts)} 훈련과정을 {cost_message} {len(top_courses)}개 찾았습니다."
-
+            
             return {
                 "message": f"{base_message}\n\n{training_explanation.strip()}",
                 "trainingCourses": top_courses,
                 "type": "training",
-                "user_profile": user_profile
+                "user_profile": user_profile,
+                "searchParams": {
+                    "location": location,
+                    "jobType": job,
+                    "areaCodes": area_codes
+                }
             }
 
         except Exception as e:
@@ -381,3 +499,35 @@ class TrainingAdvisorAgent:
                 "type": "error",
                 "user_profile": user_profile
             }
+
+    async def _generate_training_explanation(self, courses: List[Dict]) -> str:
+        """훈련과정 목록에 대한 전문적인 설명을 생성합니다."""
+        try:
+            if not courses:
+                return "현재 조건에 맞는 훈련과정이 없습니다."
+
+            # 훈련과정 정보 포맷팅
+            courses_info = []
+            for course in courses:
+                course_info = {
+                    "title": course.get("title", ""),
+                    "institute": course.get("institute", ""),
+                    "period": course.get("period", ""),
+                    "cost": course.get("cost", ""),
+                    "method": course.get("method", ""),
+                    "employment_rate": course.get("employment_rate", ""),
+                    "ncs_code": course.get("ncs_code", "")
+                }
+                courses_info.append(course_info)
+
+            # prompts.py의 TRAINING_EXPLANATION_PROMPT 사용
+            chain = TRAINING_EXPLANATION_PROMPT | self.llm | StrOutputParser()
+            explanation = await chain.ainvoke({
+                "courses": json.dumps(courses_info, ensure_ascii=False, indent=2)
+            })
+
+            return explanation.strip()
+
+        except Exception as e:
+            logger.error(f"[TrainingAdvisor] 훈련과정 설명 생성 중 오류: {str(e)}")
+            return "죄송합니다. 훈련과정 설명을 생성하는 중에 문제가 발생했습니다."

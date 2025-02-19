@@ -9,21 +9,7 @@ def apply_dictionary_rules(query: str) -> str:
     pattern = re.compile("|".join(map(re.escape, DICTIONARY.keys())))
     return pattern.sub(lambda match: DICTIONARY[match.group(0)], query)
 
-# 문서 검증 프롬프트
-# verify_prompt = PromptTemplate.from_template("""
-# 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
 
-# 질문: {query}
-
-# 문서들:
-# {context}
-
-# 답변 형식:
-# - 문서가 충분한 정보를 포함하고 있다면 "YES"
-# - 문서가 충분한 정보를 포함하고 있지 않다면 "NO"
-
-# 답변:
-# """)
 verify_prompt = PromptTemplate.from_template("""
 Please determine whether the following documents contain enough information to answer the user's question.
 
@@ -39,15 +25,7 @@ Answer format:
 Answer:
 """)
 
-# 질문 변환 프롬프트 (DICTIONARY 적용됨)
-# rewrite_prompt = PromptTemplate.from_template("""
-# 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
-# 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
 
-# 원본 질문: {original_query}
-
-# 변경된 질문: {transformed_query}
-# """)
 rewrite_prompt = PromptTemplate.from_template("""
 Look at the user's question and refer to our dictionary to modify the user's question.
 Make sure to strictly apply the rules in the dictionary.
@@ -97,6 +75,14 @@ Conversation principles:
 2. Include questions to identify the job seeker's preferences and conditions.
 3. Use language that is friendly to seniors.
 4. Provide clear and easily understandable explanations.
+
+Search Guidelines:
+1. Summarize key points from search results concisely
+2. Include only essential information
+3. Acknowledge if information is insufficient
+4. You must always indicate the source. Use Markdown links for references.
+5. Stick to verified facts
+6. End with: '혹시 채용 정보나 직업 훈련에 대해 더 자세히 알아보고 싶으신가요?'
 """
 
 # 기본 대화 프롬프트
@@ -224,7 +210,7 @@ Evaluation criteria:
 """)
 
 # 훈련정보 관련 프롬프트 추가
-TRAINING_PROMPT = PromptTemplate.from_template("""
+NER_TRAINING_PROMPT = PromptTemplate.from_template("""
 You are a vocational training counselor for senior job seekers.
 From the following user request, extract the information necessary to search for training programs.
 
@@ -245,178 +231,38 @@ Special rules:
 
 """)
 
-TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template("""
-Extract training/education-related information from the user's message.
+TRAINING_EXPLANATION_PROMPT = ChatPromptTemplate.from_template("""
+You are a professional vocational training counselor. Please analyze and explain the following training courses from a professional perspective.
 
-Training Classification Reference:
-1. Training Types (훈련종류):
-   - National Tomorrow Learning Card (국민내일배움카드훈련)
-   - Business Training (사업주훈련)
-   - Consortium Training (컨소시엄훈련)
-   - Work and Learning (일학습병행)
-   - Unemployed Training (실업자훈련)
-   - Employee Training (재직자훈련)
+Training Courses:
+{courses}
 
-2. Training Fields (훈련분야):
-   - IT/Development: AI, Artificial Intelligence, Programming, Big Data, Cloud
-   - Office: Management, Accounting, Marketing, HR
-   - Service: Care Worker, Cooking, Beauty
-   - Technical: Machinery, Electrical, Construction, Automotive
+Please include the following in your explanation:
+1. Key features and advantages of each course
+2. Employment prospects and career paths
+3. Prerequisites and preparation requirements
+4. Cost-effectiveness analysis
+5. Assessment of training duration and methods
 
-3. Training Locations (훈련지역):
-   - Cities: Seoul, Gyeonggi, Incheon, Busan, Daegu, etc.
-   - Seoul Districts: Gangnam-gu, Gangdong-gu, Nowon-gu, etc.
+Response Format:
+- Maintain a professional and objective tone
+- Provide clear and specific information
+- Include realistic yet encouraging advice
+- Use easily understandable terminology
+- Focus on practical benefits for senior job seekers
 
-4. Training Methods (훈련방법):
-   - In-person Training (집체훈련)
-   - On-site Training (현장훈련)
-   - Remote Training (원격훈련)
-   - Blended Training (혼합훈련)
+Special Considerations:
+- Highlight courses with high employment rates
+- Explain government support or subsidies if available
+- Mention any age-friendly features
+- Address common concerns of senior learners
+- Suggest preparation steps for successful completion
 
-User Message: {user_query}
-
-Please extract and return the following information in JSON format:
-{{
-    "training_type": "Training type in Korean (empty if none)",
-    "training_field": "Training field keyword in Korean (empty if none)",
-    "location": "Location in Korean (empty if none)",
-    "training_method": "Training method in Korean (empty if none)",
-    "cost_info": "Cost-related information in Korean (if any)"
-}}
-
-Examples:
-1. Input: "AI 관련 온라인 강의 찾아줘"
-   Output: {{
-       "training_field": "AI",
-       "training_method": "원격훈련",
-       "location": "",
-       "training_type": "",
-       "cost_info": ""
-   }}
-
-2. Input: "서울 강남구에서 국민내일배움카드로 들을 수 있는 프로그래밍 수업 알려줘"
-   Output: {{
-       "training_field": "프로그래밍",
-       "location": "서울 강남구",
-       "training_type": "국민내일배움카드훈련",
-       "training_method": "",
-       "cost_info": ""
-   }}
-
-Important Notes:
-1. Always return Korean text in the output JSON
-2. Match training types and methods exactly as specified in the reference
-3. For locations, maintain the exact district names (e.g., "강남구" not just "강남")
-4. Keep field values empty ("") if not explicitly mentioned in the user message
-""")
-
-# 이력서 작성 가이드 프롬프트 추가
-RESUME_GUIDE_PROMPT = PromptTemplate.from_template("""
-You are a professional career counselor specializing in helping senior job seekers write effective resumes.
-
-User Query: {query}
-Previous Chat History: {chat_history}
-
-Task: Provide tailored resume writing advice based on the user's specific question or needs.
-
-Guidelines for Response:
-1. Basic Information Section
-   - Contact details (phone, email)
-   - Professional photo guidelines
-   - Address format
-
-2. Work Experience Section
-   - Reverse chronological order
-   - Achievement-focused descriptions
-   - Quantifiable results
-   - Senior-friendly job history presentation
-
-3. Education & Certifications
-   - Relevant certifications first
-   - Recent training or courses
-   - Skills development emphasis
-
-4. Core Competencies
-   - Age-advantage skills
-   - Transferable skills
-   - Industry-specific expertise
-   - Technology proficiency level
-
-5. Self-Introduction
-   - Experience highlights
-   - Motivation statement
-   - Value proposition
-   - Career transition explanation (if applicable)
-
-Special Considerations for Senior Job Seekers:
-1. Focus on recent experience (last 10-15 years)
-2. Emphasize adaptability and learning ability
-3. Highlight wisdom and stability
-4. Address technology comfort level honestly
-5. Showcase mentoring/leadership abilities
-
-Format your response:
-1. Keep it concise and clear
-2. Use bullet points for easy reading
-3. Provide specific examples
-4. Include age-appropriate language
-5. Focus on strengths relevant to the target position
-
-Remember:
-- Be encouraging and supportive
-- Emphasize experience as an advantage
-- Provide practical, actionable advice
-- Address age-related concerns professionally
-
-Response should be structured as:
-1. Direct answer to the specific question
-2. Relevant examples or templates
-3. Additional tips specific to senior job seekers
-4. Next steps or follow-up suggestions
-""")
-
-# 이력서 피드백 프롬프트 추가
-RESUME_FEEDBACK_PROMPT = PromptTemplate.from_template("""
-You are a professional resume reviewer specializing in senior job seeker resumes.
-
-Resume Content: {resume_content}
-Job Target: {job_target}
-
-Task: Provide constructive feedback on the resume with special consideration for senior job seekers.
-
-Analysis Areas:
-1. Overall Presentation
-   - Layout and formatting
-   - Length and conciseness
-   - Professional appearance
-
-2. Content Effectiveness
-   - Relevance to target position
-   - Achievement highlighting
-   - Experience presentation
-   - Skills emphasis
-
-3. Age-Smart Strategies
-   - Recent experience focus
-   - Technology skills presentation
-   - Adaptability demonstration
-   - Wisdom/experience leverage
-
-4. Red Flags
-   - Age discrimination triggers
-   - Outdated information
-   - Gaps in employment
-   - Technical skill gaps
-
-Provide feedback in the following format:
-1. Strengths (3-4 points)
-2. Areas for Improvement (3-4 points)
-3. Specific Recommendations
-4. Additional Resources or Next Steps
-
-Remember:
-- Be constructive and encouraging
-- Focus on actionable improvements
-- Consider industry-specific needs
-- Address age-related concerns tactfully
+Structure your response as:
+1. Overview of available courses
+2. Detailed analysis of each course
+3. Practical recommendations
+4. Next steps for enrollment
+                                                               
+Always provide your answer in Korean.
 """)
