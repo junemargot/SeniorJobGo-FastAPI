@@ -39,11 +39,17 @@ def build_supervisor_agent() -> AgentExecutor:
             func=chat_agent_tool_func,
             description="일반적인 대화 처리. 맛집, 날씨, 교통 등 일상적인 질문에 사용",
             coroutine=chat_agent_tool_func  # 비동기 함수 지정
+        ),
+        Tool(
+            name="meal_agent_tool",
+            func=meal_agent_tool_func,
+            description="무료급식소 정보 검색. 무료급식, 급식소, 식사 등과 관련된 질문에 사용",
+            coroutine=meal_agent_tool_func  # 비동기 함수 지정
         )
     ]
 
     # ReAct 프롬프트 템플릿
-    react_template = """당신은 고령자를 위한 채용/교육 상담 시스템의 관리자입니다.
+    react_template = """당신은 고령자를 위한 채용/교육/무료급식 상담 시스템의 관리자입니다.
 사용자의 질문을 분석하여 필요한 도구를 사용해 정보를 얻고, 최종 답변을 생성하세요.
 
 사용자 입력: {input}
@@ -276,5 +282,43 @@ async def chat_agent_tool_func(input_str: str) -> str:
         logger.error(f"[chat_agent_tool] 오류: {str(e)}", exc_info=True)
         return json.dumps({
             "message": f"대화 처리 중 오류 발생: {str(e)}",
+            "type": "error"
+        }, ensure_ascii=False)
+
+async def meal_agent_tool_func(input_str: str) -> str:
+    """무료급식소 정보 검색 도구"""
+    try:
+        # 입력값 검증 및 파싱
+        if not input_str:
+            raise ValueError("입력값이 비어있습니다")
+            
+        # 입력값이 문자열인지 확인하고 파싱
+        if not isinstance(input_str, str):
+            input_str = json.dumps(input_str, ensure_ascii=False)
+            
+        try:
+            data = json.loads(input_str)
+            query = data.get("query", input_str)
+        except json.JSONDecodeError:
+            query = input_str
+            
+        # FastAPI app state에서 meal_agent 가져오기
+        from app.main import app
+        meal_agent = app.state.meal_agent
+        
+        # meal_agent 호출
+        response = meal_agent.generate_response(query)
+        
+        # 응답 형식화
+        return json.dumps({
+            "message": str(response),
+            "type": "meal",
+            "final_answer": str(response)
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error(f"[meal_agent_tool] 오류: {str(e)}", exc_info=True)
+        return json.dumps({
+            "message": f"무료급식소 검색 중 오류 발생: {str(e)}",
             "type": "error"
         }, ensure_ascii=False)

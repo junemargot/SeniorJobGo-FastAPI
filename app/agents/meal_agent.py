@@ -1,21 +1,22 @@
 import time
-from openai import OpenAI
-from konlpy.tag import Okt  # 제거
+from langchain_openai import ChatOpenAI
 from cachetools import TTLCache  # 제거
 from app.core.config import settings
 from app.services.data_client import PublicDataClient
-from kiwipiepy import Kiwi
+import aiohttp  # 비동기 HTTP 클라이언트
+import logging
+from typing import Dict
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+logger = logging.getLogger(__name__)
 
 class MealAgent: 
   """
   무료급식소 정보를 제공하는 AI 기반 에이전트.
   사용자 질문을 분석하여 지역 정보를 추출하고, 필터링된 무료급식소 데이터를 반환합니다.
   """
-  def __init__(self, data_client: PublicDataClient):
+  def __init__(self, data_client: PublicDataClient, llm: ChatOpenAI):
     self.data_client = data_client              # 공공데이터 API에서 데이터를 가져오는 객체
-    self.kiwi = Kiwi()
+    self.llm = llm
     self.cache = TTLCache(maxsize=100, ttl=300) # 최대 100개 저장, 5분간 유지
     self.SYSTEM_PROMPT = """
       당신은 고령층을 위한 무료 급식소 안내 전문가입니다.
@@ -32,84 +33,94 @@ class MealAgent:
       질문: {query}
       """
   
-  def generate_response(self, query: str) -> str:
-    """
-    사용자의 질문에 대해 무료급식소 정보를 제공하는 응답을 생성합니다.
-    
-    Args:
-      query (str): 사용자의 질문 (예: "성동구 무료급식소, 강남구 무료급식소")
-        
-    Returns:
-      str: 질문에 대한 응답
-    """
-    
-    start_time = time.time() # 시작 시간 기록
-    print(f"DEBUG: 시작 - 사용자 입력 쿼리: {query}")
-    
-    # 1. 다중 지역명 추출 (예: ["성동구", "강남구"])
-    regions = self._extract_region(query)
-    print(f"DEBUG: 결과 - Extracted regions: '{regions}'")
-    
-    if not regions:
-      elapsed_time = time.time() - start_time
-      print(f"DEBUG: 처리 시간: {elapsed_time:.2f} 초")
-      return "죄송합니다. 어느 지역의 무료 급식소를 찾으시는지 명확히 말씀해 주시겠어요?"
+  async def chat(self, query: str, user_profile: Dict = None) -> Dict:
+    """사용자의 질문에 대해 무료급식소 정보를 제공하는 응답을 생성합니다"""
+    try:
+      logger.info(f"[MealAgent] 새로운 채팅 요청: {query}")
+      
+      start_time = time.time() # 시작 시간 기록
+      print(f"DEBUG: 시작 - 사용자 입력 쿼리: {query}")
+      
+      # 1. 다중 지역명 추출 (예: ["성동구", "강남구"])
+      regions = self._extract_region(query)
+      print(f"DEBUG: 결과 - Extracted regions: '{regions}'")
+      
+      if not regions:
+        elapsed_time = time.time() - start_time
+        print(f"DEBUG: 처리 시간: {elapsed_time:.2f} 초")
+        return "죄송합니다. 어느 지역의 무료 급식소를 찾으시는지 명확히 말씀해 주시겠어요?"
 
-    # 2. 각 지역별로 캐시에서 결과 조회 (캐시 키는 단일 지역명)
-    results = {}
-    for region in regions:
-      if region in self.cache:
-        print(f"DEBUG: 캐시에 '{region}' 결과 있음")
-        results[region] = self.cache[region]
-      else:
-        print(f"DEBUG: 캐시에 '{region}' 결과 없음")
-        results[region] = None
+      # 지역명 추출
+      regions = self._extract_region(query)
+      if not regions:
+        return {
+          "message": "어느 지역의 무료 급식소를 찾으시는지 명확히 말씀해 주시겠어요? 🤔",
+          "type": "meal"
+        }
 
-    print(f"DEBUG: 캐시 결과 - {results}")
-
-    # 3. 캐시 미스가 있는 경우, 전체 데이터를 불러와 각 지역에 대해 새로운 결과 생성
-    if any(v is None for v in results.values()):
-      all_data = self.data_client.fetch_meal_services()
-      print("DEBUG: 결과 - 전체 데이터 로드 완료")
-
+      # 2. 각 지역별로 캐시에서 결과 조회 (캐시 키는 단일 지역명)
+      results = {}
       for region in regions:
-        if results[region] is None:
-          filtered_data = self.data_client.filter_by_region(all_data, region)
-          print(f"DEBUG: {region} 필터된 데이터: {filtered_data}")
-          
-          # Fallback: 시설명이나 주소에 region 키워드가 포함되어 있는지 검사
-          if not filtered_data:
-            fallback_data = [
-              item for item in all_data
-              if region in item.get('fcltyNm', '') or region in item.get('rdnmadr', '')
-            ]
+        if region in self.cache:
+          print(f"DEBUG: 캐시에 '{region}' 결과 있음")
+          results[region] = self.cache[region]
+        else:
+          print(f"DEBUG: 캐시에 '{region}' 결과 없음")
+          results[region] = None
+
+      print(f"DEBUG: 캐시 결과 - {results}")
+
+      # 3. 캐시 미스가 있는 경우, 전체 데이터를 불러와 각 지역에 대해 새로운 결과 생성
+      if any(v is None for v in results.values()):
+        all_data = self.data_client.fetch_meal_services()
+        print("DEBUG: 결과 - 전체 데이터 로드 완료")
+
+        for region in regions:
+          if results[region] is None:
+            filtered_data = self.data_client.filter_by_region(all_data, region)
+            print(f"DEBUG: {region} 필터된 데이터: {filtered_data}")
             
-            if fallback_data:
-              print(f"DEBUG: {region} fallback 필터된 검사 결과: {fallback_data}")
-
-          if filtered_data:
-            region_response = f"{region}에서 {len(filtered_data)}개의 무료 급식소를 찾았습니다:\n\n"
-            for item in filtered_data:
-              region_response += f"- {item['fcltyNm']}\n"
-              region_response += f"  주소: {item['rdnmadr']}\n"
-              region_response += f"  운영: {item['operInstitutionNm']}\n"
-              region_response += f"  급식시간: {item['mlsvTime']}\n"
-              region_response += f"  급식대상: {item['mlsvTrget']}\n\n"
-          else:
-            region_response = f"죄송합니다. 현재 {region}의 무료 급식소 정보를 찾을 수 없습니다. 🙏\n다른 지역을 검색해보시겠어요? (예: 서대문구, 중구 등)"
+            # Fallback: 시설명이나 주소에 region 키워드가 포함되어 있는지 검사
+            if not filtered_data:
+              fallback_data = [
+                item for item in all_data
+                if region in item.get('fcltyNm', '') or region in item.get('rdnmadr', '')
+              ]
               
-          # 캐시에 각 지역 결과 저장
-          self.cache[region] = region_response
-          results[region] = region_response
+              if fallback_data:
+                print(f"DEBUG: {region} fallback 필터된 검사 결과: {fallback_data}")
 
-    # 4. 캐시에 저장된 결과 조합
-    final_response = "\n".join(results[region] for region in regions)
+            if filtered_data:
+              region_response = f"{region}에서 {len(filtered_data)}개의 무료 급식소를 찾았습니다:\n\n"
+              for item in filtered_data:
+                region_response += f"- {item['fcltyNm']}\n"
+                region_response += f"  주소: {item['rdnmadr']}\n"
+                region_response += f"  운영: {item['operInstitutionNm']}\n"
+                region_response += f"  급식시간: {item['mlsvTime']}\n"
+                region_response += f"  급식대상: {item['mlsvTrget']}\n\n"
+            else:
+              region_response = f"죄송합니다. 현재 {region}의 무료 급식소 정보를 찾을 수 없습니다. 🙏\n다른 지역을 검색해보시겠어요? (예: 서대문구, 중구 등)"
+                
+            # 캐시에 각 지역 결과 저장
+            self.cache[region] = region_response
+            results[region] = region_response
 
-    elapsed_time = time.time() - start_time  # 종료 시간과 시작 시간의 차이 계산
-    print(f"DEBUG: 처리 시간: {elapsed_time:.2f} 초")
-    print("=== 현재 캐시된 키:", list(self.cache.keys()))
+        # 4. 캐시에 저장된 결과 조합
+        final_response = "\n".join(results[region] for region in regions)
+        elapsed_time = time.time() - start_time  # 종료 시간과 시작 시간의 차이 계산
+        print(f"DEBUG: 처리 시간: {elapsed_time:.2f} 초")
+        print("=== 현재 캐시된 키:", list(self.cache.keys()))
+        return {
+          "message": final_response,
+          "type": "meal"
+        }
 
-    return final_response if final_response else "죄송합니다. 입력하신 지역에 해당하는 무료 급식소 정보를 찾을 수 없습니다. 🙏"
+    except Exception as e:
+      logger.error(f"[MealAgent] 처리 중 오류: {str(e)}", exc_info=True)
+      return {
+        "message": f"무료급식소 정보 검색 중 오류가 발생했습니다: {str(e)}",
+        "type": "error"
+      }
 
   def _extract_region(self, query: str) -> list:
     """
