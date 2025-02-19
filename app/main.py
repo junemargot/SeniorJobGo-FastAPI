@@ -1,21 +1,22 @@
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from langchain_openai import ChatOpenAI
-from app.core.config import settings
-from app.agents.job_advisor import JobAdvisorAgent
-from app.agents.training_advisor import TrainingAdvisorAgent
-from app.services.vector_store_ingest import VectorStoreIngest
-from app.services.vector_store_search import VectorStoreSearch
-import signal
-import sys
+# 패키지 임포트
 import json
 import logging
+import signal
+import sys
+import uvicorn
 from contextlib import asynccontextmanager
+
+# 패키지 임포트 (fastapi)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# 모듈 임포트
+from app.agents import initialize_agents
+from app.core.config import settings
 from app.core.prompts import EXTRACT_INFO_PROMPT
+from app.services import initialize_vector_store
+from app.routes import register_routes
 from db import database_initialize, database_shutdown
-from app.routes import userInform_router
-from app.routes import training_router
 
 # 로깅 설정을 더 자세하게
 logging.basicConfig(
@@ -30,43 +31,20 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # startup
     try:
-        # 벡터 스토어 초기화
-        logger.info("벡터 스토어를 초기화합니다. (ingest)")
-        ingest = VectorStoreIngest()  # DB 생성/로드 담당
-        collection = ingest.setup_vector_store()  # Chroma 객체
-        
-        logger.info("벡터 스토어 검색 객체를 초기화합니다. (search)")
-        vector_search = VectorStoreSearch(collection)
-        app.state.vector_search = vector_search  # 앱 상태에 저장
-
+        # 벡터 스토어 및 검색 객체 초기화 (.services/)
+        logger.info("벡터 스토어(ingest) 및 검색 객체(search)를 초기화합니다.")
+        initialize_vector_store(app)
         logger.info("벡터 스토어 및 검색 객체 초기화 완료")
-
         
-        # LLM과 에이전트 초기화
+        # LLM과 에이전트 초기화 (.agents/)
         logger.info("LLM과 에이전트를 초기화합니다.")
-        llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
-            temperature=0.7,
-            request_timeout=30
-        )
-        app.state.llm = llm  # 앱 상태에 저장
-        
-        # JobAdvisor 에이전트 초기화
-        app.state.job_advisor_agent = JobAdvisorAgent(
-            llm=llm,
-            vector_search=vector_search
-        )
-
-        # TrainingAdvisor 에이전트 초기화 (추가)
-        app.state.training_advisor_agent = TrainingAdvisorAgent(llm)
-
+        initialize_agents(app)
         logger.info("LLM과 에이전트 초기화 완료")
 
-        # 라우터 등록
+        # 라우터 등록 (.routes/, ..db/)
         logger.info("데이터베이스 초기화 및 라우터를 등록합니다.")
         database_initialize(app)
-        from app.routes import chat_router
-        app.include_router(chat_router.router, prefix="/api/v1")
+        register_routes(app)
         logger.info("데이터베이스 초기화 및 라우터 등록 완료")
 
     except Exception as e:
@@ -75,7 +53,9 @@ async def lifespan(app: FastAPI):
         
     yield
     # 데이터베이스 종료
+    logger.info("데이터베이스 종료 중...")
     database_shutdown()
+    logger.info("데이터베이스 종료 완료")
 
     # shutdown
     logger.info("서버를 종료합니다...")
@@ -91,8 +71,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(userInform_router.router)
-app.include_router(training_router.router)
 
 def signal_handler(sig, frame):
     """
