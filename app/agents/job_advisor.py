@@ -4,17 +4,13 @@ import json
 from typing import Dict, List, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.documents import Document
-from langchain.schema.runnable import Runnable
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
 
 from app.core.prompts import verify_prompt, rewrite_prompt, generate_prompt, chat_prompt, EXTRACT_INFO_PROMPT, CLASSIFY_INTENT_PROMPT, RESUME_GUIDE_PROMPT, RESUME_FEEDBACK_PROMPT
 
-from app.agents.chat_agent import ChatAgent
-from app.agents.training_advisor import TrainingAdvisorAgent
 from app.services.vector_store_search import VectorStoreSearch
 from app.services.document_filter import DocumentFilter
-from app.utils.constants import LOCATIONS, AREA_CODES, SEOUL_DISTRICT_CODES, JOB_SYNONYMS
 
 logger = logging.getLogger(__name__)
 
@@ -390,20 +386,3 @@ class JobAdvisorAgent:
                 "type": "error",
                 "jobPostings": []
             }
-
-    def _extract_location(self, query: str) -> Tuple[str, str]:
-        """쿼리에서 지역 정보를 추출합니다."""
-        try:
-            # 시/도 추출
-            for location in LOCATIONS:
-                if location in query:
-                    # 서울인 경우 구 정보도 확인
-                    if location == "서울":
-                        for district in SEOUL_DISTRICT_CODES.keys():
-                            if district in query:
-                                return location, district
-                    return location, ""
-            return "", ""
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 지역 정보 추출 중 에러: {str(e)}")
-            return "", ""

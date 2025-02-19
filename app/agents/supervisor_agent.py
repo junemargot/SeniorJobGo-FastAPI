@@ -209,36 +209,44 @@ async def training_advisor_tool_func(input_str: str) -> str:
         if not input_str:
             raise ValueError("입력값이 비어있습니다")
             
-        # 입력값이 문자열인지 확인하고 파싱
-        if not isinstance(input_str, str):
-            input_str = json.dumps(input_str, ensure_ascii=False)
+        # 여러 줄 JSON 문자열 처리
+        if isinstance(input_str, str):
+            # 줄바꿈과 공백 제거
+            input_str = input_str.strip().replace('\n', '')
             
-        # 입력값이 JSON 형식인지 확인
         try:
             data = json.loads(input_str)
-            query = data.get("query", input_str)
-            user_profile = data.get("user_profile", {})
-            user_ner = data.get("user_ner", {})
         except json.JSONDecodeError:
-            # JSON이 아닌 경우 문자열 그대로 사용
-            query = input_str
-            user_profile = {}
-            
-        # FastAPI app state에서 training_advisor 가져오기
+            data = {"query": input_str, "user_profile": {}}
+        
+        logger.info(f"[training_advisor_tool] input_str: {input_str}")
+
+        query = data.get("query", "")
+        user_profile = data.get("user_profile", {})
+        user_ner = data.get("user_ner", {})
+        chat_history = data.get("chat_history", "")
+        
+        # training_advisor 호출
         from app.main import app
         training_advisor = app.state.training_advisor
         
-        # await를 사용하여 비동기 함수 호출
-        response = await training_advisor.search_training_courses(query, user_profile, user_ner)
+        # search_training_courses 메서드 호출 (chat 메서드 대신)
+        response = await training_advisor.search_training_courses(
+            query=query,
+            user_profile=user_profile,
+            user_ner=user_ner,
+            chat_history=[]
+        )
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):
+            response["type"] = "training"  # type 통일
             return json.dumps(response, ensure_ascii=False)
             
         # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "chat",
+            "type": "training",
             "trainingCourses": [],
             "final_answer": str(response)
         }, ensure_ascii=False)

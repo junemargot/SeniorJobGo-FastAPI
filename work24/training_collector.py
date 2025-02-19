@@ -8,7 +8,6 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from app.utils.constants import SEOUL_DISTRICT_CODES, AREA_CODES
 from .config import (
     TRAINING_APIS,
     WORK24_COMMON_URL,
@@ -144,14 +143,9 @@ class TrainingCollector:
         # API 요청 전 캐시 무효화를 위한 타임스탬프 추가
         default_params["timestamp"] = str(int(time.time()))
         
-        data = self._make_api_request(url, default_params)
-        if data and isinstance(data, dict):
-            # API 응답 구조에 맞게 처리
-            if "srchList" in data and "scn_list" in data["srchList"]:
-                return data["srchList"]["scn_list"]
-            elif "srchList" in data:
-                return data["srchList"]
-        return []
+        response = self._make_api_request(url, default_params)
+        print(f"API 응답: {json.dumps(response, ensure_ascii=False, indent=2)}")  # 디버깅용
+        return response
         
     def _fetch_training_info(self, api_type: str, course_id: str, course_degr: str) -> Optional[Dict]:
         """훈련과정 상세 정보 조회"""
