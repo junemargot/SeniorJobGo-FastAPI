@@ -33,13 +33,13 @@ async def supervisor_node(state: FlowState):
                         try:
                             tool_result = json.loads(step[1])
                             # jobPosting도 포함하도록 수정
-                            if tool_result.get("type") in ["job", "jobPosting", "training", "chat", "error"]:
+                            if tool_result.get("type") in ["job", "training", "chat", "error"]:
                                 # jobPostings와 trainingCourses 저장
                                 state.jobPostings = tool_result.get("jobPostings", [])
                                 state.trainingCourses = tool_result.get("trainingCourses", [])
                                 
                                 state.final_response = {
-                                    "message": tool_result.get("message", ""),
+                                    "message": tool_result.get("final_answer", ""),
                                     "type": tool_result.get("type", "chat"),
                                     "jobPostings": state.jobPostings,  # 저장된 값 사용
                                     "trainingCourses": state.trainingCourses  # 저장된 값 사용

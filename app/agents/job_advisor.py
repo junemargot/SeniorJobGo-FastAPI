@@ -63,7 +63,7 @@ class JobAdvisorAgent:
             if not search_results:
                 return {
                     "message": "죄송합니다. 현재 조건에 맞는 채용정보를 찾지 못했습니다.",
-                    "type": "jobPosting",
+                    "type": "job",
                     "jobPostings": []
                 }
 
@@ -73,9 +73,10 @@ class JobAdvisorAgent:
             
             # 5. 최종 응답 생성
             response = {
-                "message": self._generate_response_message(query, job_postings, location, job_type),
-                "type": "jobPosting",
-                "jobPostings": job_postings[:5]  # 상위 5개만 반환
+                "message": json.dumps(job_postings[:5], ensure_ascii=False),
+                "type": "job",
+                "jobPostings": job_postings[:5],  # 상위 5개만 반환
+                "final_answer": self._generate_response_message(query, job_postings, location, job_type)
             }
             logger.info(f"[JobAdvisor] 최종 응답 생성 완료: {response}")
             
@@ -209,49 +210,6 @@ class JobAdvisorAgent:
         except Exception as e:
             logger.error(f"[JobAdvisor] 메시지 생성 중 오류: {str(e)}")
             return "채용정보를 찾았습니다."
-
-    async def classify_intent(self, query: str, chat_history: str = "") -> Tuple[str, float]:
-        """사용자 메시지의 의도를 분류합니다."""
-        try:
-            # 의도 분류 프롬프트 실행
-            chain = CLASSIFY_INTENT_PROMPT | self.llm | StrOutputParser()
-            response = await chain.ainvoke({
-                "user_query": query,
-                "chat_history": chat_history
-            })
-            
-            logger.info(f"[JobAdvisor] LLM 원본 응답: {response}")
-            
-            # JSON 파싱 전에 응답 정제
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
-            try:
-                result = json.loads(response)
-                intent = result.get("intent", "general")
-                confidence = float(result.get("confidence", 0.5))
-                explanation = result.get("explanation", "")
-                
-                logger.info(f"[JobAdvisor] 의도 분류 결과 - 의도: {intent}, 확신도: {confidence}, 설명: {explanation}")
-                
-                # 명확한 job 관련 의도인 경우 confidence 상향 조정
-                if intent == "job" and confidence > 0.5:
-                    confidence = max(confidence, 0.8)
-                
-                return intent, confidence
-                
-            except json.JSONDecodeError as e:
-                logger.error(f"[JobAdvisor] 의도 분류 결과 JSON 파싱 실패: {response}")
-                logger.error(f"파싱 에러: {str(e)}")
-                return "general", 0.5
-            
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 의도 분류 중 에러: {str(e)}")
-            return "general", 0.5
 
     ###############################################################################
     # (A) NER 추출용 함수
@@ -526,8 +484,6 @@ class JobAdvisorAgent:
         try:
             # 1. 채용정보 검색 실행
             search_result = await self.search_jobs(query, user_profile)
-
-            logger.info(f"[JobAdvisor] 검색 결과: {search_result}")
             
             # 2. 검색 결과가 있는 경우
             if search_result.get("jobPostings"):
@@ -535,18 +491,17 @@ class JobAdvisorAgent:
             
             # 3. 검색 결과가 없는 경우
             return {
-                "message": "죄송합니다. 현재 조건에 맞는 채용정보를 찾지 못했습니다. 다른 조건으로 검색해보시겠습니까?",
+                "message": "죄송합니다. 현재 조건에 맞는 채용정보를 찾지 못했습니다.",
                 "type": "jobPosting",
                 "jobPostings": []
             }
-
+            
         except Exception as e:
             logger.error(f"[JobAdvisor] 채팅 처리 중 오류: {str(e)}", exc_info=True)
             return {
                 "message": f"채용정보 검색 중 오류가 발생했습니다: {str(e)}",
                 "type": "error",
-                "jobPostings": [],
-                "user_profile": user_profile
+                "jobPostings": []
             }
 
     def _extract_location(self, query: str) -> Tuple[str, str]:

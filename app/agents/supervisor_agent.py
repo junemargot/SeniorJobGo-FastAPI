@@ -62,10 +62,10 @@ Thought: {agent_scratchpad}
 시작하세요!
 
 중요: 
-1. 도구를 사용할 때는 Action과 Action Input만 출력하세요.
-2. 도구 실행 결과를 받으면 반드시 'Final Answer:'로 시작하는 최종 답변을 출력하세요.
-3. 도구 실행 결과가 오류인 경우에도 'Final Answer:'로 시작하는 답변을 출력하세요.
-4. 도구 실행 결과를 받은 후 다른 도구를 호출하지 마세요."""
+1. 도구를 사용할 때는 Action과 Action Input만 출력하세요
+2. 도구 실행 결과를 받은 후 다른 도구를 호출하지 마세요
+3. 도구 실행 결과가 오류인 경우에도 최종 답변을 출력하세요
+"""
 
     # PromptTemplate으로 변환
     prompt = PromptTemplate.from_template(react_template)
@@ -75,7 +75,7 @@ Thought: {agent_scratchpad}
         llm=llm,
         tools=tools,
         prompt=prompt,
-        stop_sequence=["Final Answer:"]  # Final Answer에서 멈추도록
+        stop_sequence="final_answer"  # Final Answer에서 멈추도록
     )
 
     # AgentExecutor로 감싸서 반환
@@ -171,7 +171,8 @@ async def job_advisor_tool_func(input_str: str) -> str:
         return json.dumps({
             "message": str(response),
             "type": "job",  # job으로 통일
-            "jobPostings": []
+            "jobPostings": [],
+            "final_answer": str(response)
         }, ensure_ascii=False)
         
     except Exception as e:
@@ -219,7 +220,8 @@ async def training_advisor_tool_func(input_str: str) -> str:
         return json.dumps({
             "message": str(response),
             "type": "chat",
-            "trainingCourses": []
+            "trainingCourses": [],
+            "final_answer": str(response)
         }, ensure_ascii=False)
         
     except Exception as e:
@@ -266,7 +268,8 @@ async def chat_agent_tool_func(input_str: str) -> str:
         # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "chat"
+            "type": "chat",
+            "final_answer": str(response)
         }, ensure_ascii=False)
         
     except Exception as e:
