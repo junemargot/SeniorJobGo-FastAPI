@@ -16,7 +16,8 @@ async def supervisor_node(state: FlowState):
         input_str = json.dumps({
             "query": state.query,
             "user_profile": state.user_profile,
-            "chat_history": state.chat_history
+            "chat_history": state.chat_history,
+            "user_ner": state.user_ner
         }, ensure_ascii=False)
         
         # ReAct 실행
@@ -32,7 +33,6 @@ async def supervisor_node(state: FlowState):
                     if isinstance(step[0], AgentAction):
                         try:
                             tool_result = json.loads(step[1])
-                            # jobPosting도 포함하도록 수정
                             if tool_result.get("type") in ["job", "training", "chat", "error"]:
                                 # jobPostings와 trainingCourses 저장
                                 state.jobPostings = tool_result.get("jobPostings", [])
@@ -75,15 +75,6 @@ async def supervisor_node(state: FlowState):
         
         return state
         
-    except ValueError as ve:
-        if "early_stopping_method" in str(ve):
-            logger.error(f"[SupervisorNode] Agent 설정 오류: {str(ve)}")
-            state.final_response = {
-                "message": "시스템 설정 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-                "type": "error"
-            }
-        else:
-            raise
     except Exception as e:
         logger.error(f"[SupervisorNode] 오류: {str(e)}", exc_info=True)
         state.final_response = {

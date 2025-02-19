@@ -9,6 +9,7 @@ from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.chat_agent import ChatAgent
 from app.agents.flow_graph import build_flow_graph
 from app.models.flow_state import FlowState
+from app.agents.ner_extractor import extract_ner
 
 import os
 import json
@@ -78,6 +79,13 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             }
         }
 
+        # NER 추출
+        extracted_ner = await extract_ner(
+            user_input=chat_request.user_message,
+            llm=request.app.state.llm,
+            user_profile=chat_request.user_profile
+        )
+
         # 초기 상태 설정
         initial_state = FlowState(
             query=chat_request.user_message,
@@ -91,6 +99,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             jobPostings=[],
             trainingCourses=[],
             messages=[],
+            user_ner=extracted_ner,
             supervisor=request.app.state.supervisor  # Supervisor 인스턴스 전달
         )
 

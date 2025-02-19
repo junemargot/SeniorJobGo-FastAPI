@@ -16,6 +16,7 @@ class FlowState(BaseModel):
     query: str = ""              
     chat_history: str = ""       
     user_profile: Dict[str, Any] = {}
+    user_ner: Dict[str, Any] = {}
 
     # 에이전트 상태
     agent_type: str = ""         # "job" / "training" / "general"

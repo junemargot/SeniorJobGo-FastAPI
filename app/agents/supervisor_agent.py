@@ -59,18 +59,20 @@ def build_supervisor_agent() -> AgentExecutor:
 
 You can call the tool using exactly this format:
 Action: {tool_names}
-Action Input: <json or text input>
+Action Input: 입력은 반드시 아래 형식의 JSON으로 작성하세요
+{{
+    "query": "사용자 질문",
+    "user_profile": "사용자 프로필 정보",
+    "user_ner": "NER 추출 정보"
+}}
 
 Use exactly the ReAct format:
 Question: {input}
 Thought: {agent_scratchpad}
 
-시작하세요!
-
-중요: 
-1. 도구를 사용할 때는 Action과 Action Input만 출력하세요
-2. 도구 실행 결과를 받은 후 다른 도구를 호출하지 마세요
-3. 도구 실행 결과가 오류인 경우에도 최종 답변을 출력하세요
+규칙:
+1. 입력된 JSON에서 query, user_profile, user_ner 정보를 모두 활용하여 판단하세요.
+2. Action Input은 반드시 모든 정보를 포함한 JSON 형식으로 작성하세요.
 """
 
     # PromptTemplate으로 변환
@@ -102,14 +104,15 @@ class SupervisorAgent:
     def __init__(self, llm: ChatOpenAI):
         self.agent = build_supervisor_agent()
     
-    async def analyze_query(self, user_input: str, user_profile: dict = None, chat_history: str = "") -> dict:
+    async def analyze_query(self, user_input: str, user_profile: dict = None, chat_history: str = "", user_ner: dict = None) -> dict:
         """사용자 입력 분석"""
         try:
             # 입력 데이터 구성
             input_data = {
                 "query": user_input,
                 "user_profile": user_profile or {},
-                "chat_history": chat_history
+                "chat_history": chat_history,
+                "user_ner": user_ner or {}
             }
             
             # ReAct 실행 - async 방식으로 변경
@@ -156,16 +159,25 @@ async def job_advisor_tool_func(input_str: str) -> str:
         except json.JSONDecodeError:
             # JSON 파싱 실패 시 문자열을 직접 딕셔너리로 변환 시도
             data = {"query": input_str, "user_profile": {}}
-            
+        
+        logger.info(f"[job_advisor_tool] input_str: {input_str}")
+
         query = data.get("query", "")
         user_profile = data.get("user_profile", {})
+        user_ner = data.get("user_ner", {})
+        chat_history = data.get("chat_history", "")
         
-        # FastAPI app state에서 job_advisor 가져오기
+        logger.info(f"[job_advisor_tool] 입력 데이터: {data}")
+        
+        # job_advisor 호출
         from app.main import app
         job_advisor = app.state.job_advisor
-        
-        # await를 사용하여 비동기 함수 호출
-        response = await job_advisor.chat(query, user_profile)
+        response = await job_advisor.chat(
+            query=query,
+            user_profile=user_profile,
+            user_ner=user_ner,
+            chat_history=[]  # 빈 리스트로 전달
+        )
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):
@@ -176,7 +188,7 @@ async def job_advisor_tool_func(input_str: str) -> str:
         # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "job",  # job으로 통일
+            "type": "job",
             "jobPostings": [],
             "final_answer": str(response)
         }, ensure_ascii=False)
@@ -206,6 +218,7 @@ async def training_advisor_tool_func(input_str: str) -> str:
             data = json.loads(input_str)
             query = data.get("query", input_str)
             user_profile = data.get("user_profile", {})
+            user_ner = data.get("user_ner", {})
         except json.JSONDecodeError:
             # JSON이 아닌 경우 문자열 그대로 사용
             query = input_str
@@ -216,7 +229,7 @@ async def training_advisor_tool_func(input_str: str) -> str:
         training_advisor = app.state.training_advisor
         
         # await를 사용하여 비동기 함수 호출
-        response = await training_advisor.search_training_courses(query, user_profile)
+        response = await training_advisor.search_training_courses(query, user_profile, user_ner)
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):
@@ -299,6 +312,8 @@ async def meal_agent_tool_func(input_str: str) -> str:
         try:
             data = json.loads(input_str)
             query = data.get("query", input_str)
+            user_profile = data.get("user_profile", {})
+            user_ner = data.get("user_ner", {})
         except json.JSONDecodeError:
             query = input_str
             
@@ -307,7 +322,7 @@ async def meal_agent_tool_func(input_str: str) -> str:
         meal_agent = app.state.meal_agent
         
         # meal_agent 호출
-        response = meal_agent.generate_response(query)
+        response = meal_agent.generate_response(query, user_profile, user_ner)
         
         # 응답 형식화
         return json.dumps({

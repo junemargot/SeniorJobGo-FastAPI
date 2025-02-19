@@ -28,7 +28,7 @@ def select_agent_node(state: FlowState):
             # 필요하다면 user_profile을 JSON으로 합쳐서 ReAct에 넘길 수도 있음
             pass
 
-        tool_selection = supervisor.analyze_query(user_input, user_profile=state.user_profile)
+        tool_selection = supervisor.analyze_query(user_input, user_profile=state.user_profile, user_ner=state.user_ner)
 
         # tool_selection = {"tool": "...", "reason":"..."} 라고 가정
         state.agent_type = tool_selection.get("tool", "chat_agent_tool")

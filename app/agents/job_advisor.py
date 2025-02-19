@@ -42,12 +42,16 @@ class JobAdvisorAgent:
         self.vector_search = vector_search
         self.document_filter = DocumentFilter()
 
-    async def search_jobs(self, query: str, user_profile: Dict = None) -> Dict:
+    async def search_jobs(self, query: str, user_profile: Dict = None, user_ner: Dict = None) -> Dict:
         """채용정보 검색 실행"""
         try:
-            # 1. 검색을 위한 정보 추출
-            location, job_type = self._extract_search_info(query, user_profile)
-            logger.info(f"[JobAdvisor] NER 추출 결과 - 지역: {location}, 직무: {job_type}")
+            logger.info(f"[JobAdvisor] 검색 시작 - 쿼리: {query}")
+            
+            # 1. user_ner에서 검색 정보 가져오기
+            location = user_ner.get("지역", "")
+            job_type = user_ner.get("직무", "")
+            
+            logger.info(f"[JobAdvisor] NER 정보 - 지역: {location}, 직무: {job_type}")
             
             # 2. 벡터 검색 실행
             search_params = {
@@ -69,16 +73,15 @@ class JobAdvisorAgent:
 
             # 4. 검색 결과 처리
             job_postings = self._process_search_results(search_results)
-            logger.info(f"[JobAdvisor] 처리된 채용공고 수: {len(job_postings)}")
             
             # 5. 최종 응답 생성
             response = {
-                "message": json.dumps(job_postings[:5], ensure_ascii=False),
+                "message": self._generate_response_message(query, job_postings, location, job_type),
                 "type": "job",
                 "jobPostings": job_postings[:5],  # 상위 5개만 반환
                 "final_answer": self._generate_response_message(query, job_postings, location, job_type)
             }
-            logger.info(f"[JobAdvisor] 최종 응답 생성 완료: {response}")
+            # logger.info(f"[JobAdvisor] 최종 응답 생성 완료: {response}")
             
             return response
 
@@ -89,44 +92,6 @@ class JobAdvisorAgent:
                 "type": "error",
                 "jobPostings": []
             }
-
-    def _extract_search_info(self, query: str, user_profile: Dict = None) -> tuple[str, str]:
-        """검색에 필요한 지역과 직무 정보 추출"""
-        try:
-            # 1. 지역 정보 추출
-            location = ""
-            for loc in LOCATIONS:
-                if loc in query:
-                    location = loc
-                    # 서울인 경우 구 정보도 확인
-                    if loc == "서울":
-                        for district in SEOUL_DISTRICT_CODES:
-                            if district in query:
-                                location = f"{loc} {district}"
-                                break
-                    break
-            
-            # 2. 직무 정보 추출
-            job_type = ""
-            # 직무 키워드 매칭
-            job_keywords = JOB_SYNONYMS.keys()
-            for keyword in job_keywords:
-                if keyword in query:
-                    job_type = keyword
-                    break
-            
-            # 3. 사용자 프로필에서 보완
-            if user_profile:
-                if not location and user_profile.get("location"):
-                    location = user_profile["location"]
-                if not job_type and user_profile.get("job_type"):
-                    job_type = user_profile["job_type"]
-            
-            return location, job_type
-            
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 정보 추출 중 오류: {str(e)}")
-            return "", ""
 
     def _process_search_results(self, documents: List[Document]) -> List[Dict]:
         """검색 결과를 JobPosting 형식으로 변환"""
@@ -148,7 +113,7 @@ class JobAdvisorAgent:
                         "hiringProcess": doc.metadata.get("전형방법", ""),
                         "insurance": doc.metadata.get("4대보험", ""),
                         "jobCategory": doc.metadata.get("직종", ""),
-                        "jobKeywords": doc.metadata.get("직무키워드", ""),
+                        "jobKeywords": doc.metadata.get("직무", ""),
                         "posting_url": doc.metadata.get("채용공고URL", "")
                     }
                     job_postings.append(posting)
@@ -203,94 +168,13 @@ class JobAdvisorAgent:
                 
             location_job = " ".join(message_parts)
             if location_job:
-                return f"{location_job}에서 {count}개의 채용정보를 찾았습니다."
+                return f"{location_job}에서 {count}개 중 5개의 채용정보입니다."
             else:
-                return f"'{query}' 검색 결과 {count}개의 채용정보를 찾았습니다."
+                return f"'{query}' 검색 결과 {count}개 중 5개의 채용정보입니다."
                 
         except Exception as e:
             logger.error(f"[JobAdvisor] 메시지 생성 중 오류: {str(e)}")
             return "채용정보를 찾았습니다."
-
-    ###############################################################################
-    # (A) NER 추출용 함수
-    ###############################################################################
-    def get_user_ner_runnable(self) -> Runnable:
-        """
-        사용자 입력 예: "서울 요양보호사"
-        -> LLM이 아래와 같이 JSON으로 추출:
-           {"직무": "요양보호사", "지역": "서울", "연령대": ""}
-        """
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set.")
-
-        llm = ChatOpenAI(
-            openai_api_key=openai_api_key,
-            model_name="gpt-4o-mini",
-            temperature=0.0
-        )
-
-        return EXTRACT_INFO_PROMPT | llm
-
-
-    def _extract_user_ner(self, user_message: str, user_profile: Dict[str, str], chat_history: str = "") -> Dict[str, str]:
-        """사용자 메시지에서 정보 추출"""
-        try:
-            # 1. 먼저 사전을 이용한 직접 매칭 시도
-            extracted_info = {"지역": "", "직무": "", "연령대": ""}
-            
-            # 지역 매칭 - constants.py의 LOCATIONS 사용
-            for location in LOCATIONS:
-                if location in user_message:
-                    extracted_info["지역"] = location
-                    break
-            
-            # 직무 매칭 및 유의어 확인
-            words = user_message.split()
-            for word in words:
-                if word in JOB_SYNONYMS:
-                    extracted_info["직무"] = word
-                    break
-                # 유의어 검색
-                for job, synonyms in JOB_SYNONYMS.items():
-                    if word in synonyms:
-                        extracted_info["직무"] = job
-                        break
-            
-            # 2. 사전 매칭으로 충분한 정보를 얻지 못한 경우 LLM 사용
-            if not (extracted_info["지역"] or extracted_info["직무"]):
-                chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
-                response = chain.invoke({
-                    "user_query": user_message,
-                    "chat_history": chat_history if chat_history else ""
-                })
-                
-                # JSON 파싱
-                cleaned = response.replace("```json", "").replace("```", "").strip()
-                llm_extracted = json.loads(cleaned)
-                
-                # LLM 결과와 사전 매칭 결과 병합
-                if not extracted_info["지역"] and llm_extracted.get("지역"):
-                    extracted_info["지역"] = llm_extracted["지역"]
-                if not extracted_info["직무"] and llm_extracted.get("직무"):
-                    extracted_info["직무"] = llm_extracted["직무"]
-                if llm_extracted.get("연령대"):
-                    extracted_info["연령대"] = llm_extracted["연령대"]
-            
-            # 3. 프로필 정보로 보완
-            if user_profile:
-                if not extracted_info["지역"] and user_profile.get("location"):
-                    extracted_info["지역"] = user_profile["location"]
-                if not extracted_info["직무"] and user_profile.get("jobType"):
-                    extracted_info["직무"] = user_profile["jobType"]
-                    
-            logger.info(f"[JobAdvisor] NER 추출 결과: {extracted_info}")
-            return extracted_info
-            
-        except Exception as e:
-            logger.error(f"[JobAdvisor] NER 추출 중 에러: {str(e)}")
-            return {"지역": "", "직무": "", "연령대": ""}
-
 
     ###############################################################################
     # (B) 일반 대화/채용정보 검색 라우팅
@@ -470,20 +354,23 @@ class JobAdvisorAgent:
         return workflow.compile()
 
 
-    async def chat(self, query: str, user_profile: Dict = None, chat_history: List[Dict] = None) -> Dict:
+    async def chat(self, query: str, user_profile: Dict = None, user_ner: Dict = None, chat_history: List[Dict] = None) -> Dict:
         """사용자 메시지에 대한 응답을 생성합니다."""
-        logger.info("=" * 50)
-        logger.info("[JobAdvisor] chat 메서드 시작")
-        logger.info(f"[JobAdvisor] 입력 쿼리: {query}")
-        logger.info(f"[JobAdvisor] 사용자 프로필: {user_profile}")
-        logger.info(f"[JobAdvisor] 대화 이력 수: {len(chat_history) if chat_history else 0}")
-        logger.info(f"[JobAdvisor] 대화 이력 타입: {type(chat_history)}")
-        if chat_history:
-            logger.info(f"[JobAdvisor] 대화 이력 첫 번째 항목: {chat_history[0] if chat_history else None}")
-
         try:
+            logger.info("=" * 50)
+            logger.info("[JobAdvisor] chat 메서드 시작")
+            logger.info(f"[JobAdvisor] 입력 쿼리: {query}")
+            logger.info(f"[JobAdvisor] 사용자 프로필: {user_profile}")
+            logger.info(f"[JobAdvisor] NER 정보: {user_ner}")
+            
+            # chat_history가 None이면 빈 리스트로 초기화
+            if chat_history is None:
+                chat_history = []
+            
+            logger.info(f"[JobAdvisor] 대화 이력 수: {len(chat_history)}")
+            
             # 1. 채용정보 검색 실행
-            search_result = await self.search_jobs(query, user_profile)
+            search_result = await self.search_jobs(query, user_profile, user_ner)
             
             # 2. 검색 결과가 있는 경우
             if search_result.get("jobPostings"):
