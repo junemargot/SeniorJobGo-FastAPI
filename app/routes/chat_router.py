@@ -85,6 +85,8 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             error_message="",
             jobPostings=[],
             trainingCourses=[],
+            policyPostings=[],
+            mealPostings=[],
             messages=[],
             user_ner=extracted_ner,
             supervisor=request.app.state.supervisor  # Supervisor 인스턴스 전달
@@ -115,6 +117,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 jobPostings=final_state_dict.get("jobPostings", []),
                 trainingCourses=final_state_dict.get("trainingCourses", []),
                 policyPostings=final_state_dict.get("policyPostings", []),
+                mealPostings=final_state_dict.get("mealPostings", []),
                 user_profile=chat_request.user_profile or {}
             )
             
@@ -132,6 +135,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 jobPostings=[],
                 trainingCourses=[],
                 policyPostings=[],
+                mealPostings=[],
                 user_profile=chat_request.user_profile or {}
             )
         
@@ -143,6 +147,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             jobPostings=[],
             trainingCourses=[],
             policyPostings=[],
+            mealPostings=[],
             user_profile=chat_request.user_profile or {}
         )
 

@@ -347,15 +347,15 @@ async def policy_advisor_tool_func(input_str: str) -> str:
                 message = f"총 {len(policies)}건의 정책 정보를 찾았습니다.\n\n"
                 
                 for i, policy in enumerate(policies, 1):
-                    message += f"{i}. {policy['제목']}\n"
-                    message += f"- 출처: {policy['출처']}\n"
-                    message += f"- 대상: {policy['지원_대상']}\n"
-                    message += f"- 내용: {policy['주요_내용']}\n"
-                    if policy['신청_방법'] != "정보 없음":
-                        message += f"- 신청방법: {policy['신청_방법']}\n"
-                    if policy['연락처'] != "정보 없음":
-                        message += f"- 문의: {policy['연락처']}\n"
-                    message += f"- 자세히 보기: {policy['URL']}\n\n"
+                    message += f"{i}. {policy['title']}\n"
+                    message += f"- 출처: {policy['source']}\n"
+                    message += f"- 대상: {policy['target']}\n"
+                    message += f"- 내용: {policy['content']}\n"
+                    if policy['applyMethod'] != "정보 없음":
+                        message += f"- 신청방법: {policy['applyMethod']}\n"
+                    if policy['contact'] != "정보 없음":
+                        message += f"- 문의: {policy['contact']}\n"
+                    message += f"- 자세히 보기: {policy['url']}\n\n"
             else:
                 message = "죄송합니다. 현재 조건에 맞는 정책 정보를 찾지 못했습니다."
 

@@ -37,11 +37,31 @@ class TrainingCourse(BaseModel):
     yardMan: Optional[str] = None
     titleLink: Optional[str] = None
     telNo: Optional[str] = None
-    
+
+class PolicyPosting(BaseModel):
+    source: str
+    title: str
+    target: str
+    content: str
+    applyMethod: str
+    contact: str
+    url: str
+
+class MealPosting(BaseModel):
+    name: str
+    address: str
+    phone: str
+    operatingHours: str
+    targetGroup: str
+    description: str 
+
 class ChatResponse(BaseModel):
     type: str  # 'list' 또는 'detail'
     message: str
     jobPostings: List[JobPosting]
     trainingCourses: List[TrainingCourse] = []  # 훈련과정 정보 추가
+    policyPostings: List[PolicyPosting] = []  # 정책 정보 추가
+    mealPostings: List[MealPosting] = []  # 식사 정보 추가
     user_profile: Optional[dict] = None
-    processingTime: float = 0  # 처리 시간 추가 
+    processingTime: float = 0  # 처리 시간 추가
+

@@ -194,13 +194,13 @@ def extract_policy_info(content: str) -> Dict:
 
         # 정보 추출 및 구조화
         pattern_dict = {
-            "출처": r"출처:\s*(.+?)(?:\n|$)",
-            "제목": r"제목:\s*(.+?)(?:\n|$)",
-            "지원_대상": r"지원 대상:\s*(.+?)(?:\n|$)",
-            "주요_내용": r"주요 내용:\s*(.+?)(?:\n|$)",
-            "신청_방법": r"신청 방법:\s*(.+?)(?:\n|$)",
-            "연락처": r"연락처:\s*(.+?)(?:\n|$)",
-            "URL": r"URL:\s*(.+?)(?:\n|$)"
+            "source": r"출처:\s*(.+?)(?:\n|$)",
+            "title": r"제목:\s*(.+?)(?:\n|$)",
+            "target": r"지원 대상:\s*(.+?)(?:\n|$)",
+            "content": r"주요 내용:\s*(.+?)(?:\n|$)",
+            "applyMethod": r"신청 방법:\s*(.+?)(?:\n|$)",
+            "contact": r"연락처:\s*(.+?)(?:\n|$)",
+            "url": r"URL:\s*(.+?)(?:\n|$)"
         }
 
         # 기본값 "-"으로 초기화
@@ -271,8 +271,8 @@ def query_policy_agent(query: str) -> Dict:
                     # 빠른 정보 추출
                     policy_info = extract_policy_info(content)
                     if policy_info:
-                        policy_info["출처"] = formatted_domain
-                        policy_info["URL"] = url
+                        policy_info["source"] = formatted_domain
+                        policy_info["url"] = url
                         policies.append(policy_info)
                     
                 except Exception as item_error:
