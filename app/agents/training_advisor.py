@@ -160,7 +160,7 @@ class TrainingAdvisorAgent:
                 "srchTraProcessNm": "",                # 훈련과정명
                 "srchTraOrganNm": ""                   # 훈련기관명
             }
-            
+
             # 1. 지역 코드 설정
             location = user_ner.get("지역") or user_profile.get("location", "")
             if location:
@@ -176,14 +176,41 @@ class TrainingAdvisorAgent:
                         district_code = self.area_medium_codes.get(district, "")
                         logger.info(f"[TrainingAdvisor] 구 코드: {district} -> {district_code}")
                         params["srchTraArea2"] = district_code
-            
+
             # 2. 관심분야/직무 매핑
-            interests = user_ner.get("관심분야", [])
-            job_type = user_ner.get("직무", "")
-            
-            if interests or job_type:
-                # 관심분야나 직무 중 하나라도 있으면 처리
-                target = interests[0] if interests else job_type
+            interests = []
+
+            # user_ner의 관심분야 처리
+            ner_interests = user_ner.get("관심분야", [])
+            if isinstance(ner_interests, str):
+                # 쉼표로 구분된 문자열을 리스트로 변환
+                interests.extend([interest.strip() for interest in ner_interests.split(",") if interest.strip()])
+            elif isinstance(ner_interests, list):
+                interests.extend(ner_interests)
+
+            # user_profile의 interests 처리
+            profile_interests = user_profile.get("interests", [])
+            if isinstance(profile_interests, str):
+                # 쉼표로 구분된 문자열을 리스트로 변환
+                interests.extend([interest.strip() for interest in profile_interests.split(",") if interest.strip()])
+            elif isinstance(profile_interests, list):
+                interests.extend(profile_interests)
+
+            logger.info(f"[TrainingAdvisor] user_ner: {user_ner}")
+            logger.info(f"[TrainingAdvisor] 관심분야: {interests}")
+
+            # 직무 처리
+            job_type = user_ner.get("직무", "") or user_profile.get("job_type", "")
+            if job_type:  # 직무가 있으면 관심분야에 추가
+                interests.append(job_type)
+            logger.info(f"[TrainingAdvisor] 직무 추가된 관심분야: {interests}")
+
+            if interests:  # 관심분야가 있는 경우
+                # 중복 제거 및 빈 문자열 제거
+                interests = list(set(filter(None, interests)))
+                target = interests[0]  # 첫 번째 관심분야 사용
+                
+                # NCS 코드 매핑
                 if target in self.interest_ncs_mapping:
                     mapping = self.interest_ncs_mapping[target]
                     params["srchNcs1"] = mapping.get("ncs1", "")
@@ -191,16 +218,18 @@ class TrainingAdvisorAgent:
                     logger.info(f"[TrainingAdvisor] NCS 코드 설정: {target} -> {params['srchNcs1']}, {params['srchNcs2']}")
                 
                 # 직업 유의어 처리
+                search_terms = [target]  # 기본 검색어
                 synonyms = get_job_synonyms(target)
                 if synonyms:
-                    # 과정명에 직업 유의어 포함 검색
-                    search_terms = [target] + list(synonyms)
-                    params["srchTraProcessNm"] = "|".join(search_terms)
-                    logger.info(f"[TrainingAdvisor] 검색어 설정: {params['srchTraProcessNm']}")
-            
+                    search_terms.extend(synonyms)
+                
+                # 검색어 설정
+                params["srchTraProcessNm"] = "|".join(search_terms)
+                logger.info(f"[TrainingAdvisor] 검색어 설정: {params['srchTraProcessNm']}")
+
             logger.info(f"[TrainingAdvisor] 최종 검색 파라미터: {params}")
             return params
-            
+
         except Exception as e:
             logger.error(f"[TrainingAdvisor] 검색 파라미터 구성 중 오류: {str(e)}")
             return params
