@@ -26,9 +26,10 @@ logger.info("환경변수 로드 완료")
 
 # OpenAI 및 Tavily 설정
 llm = ChatOpenAI(
-    model="gpt-4-turbo-preview",
+    model="gpt-4o-mini",
     temperature=0
 )
+
 search = TavilySearchResults(
     api_key=os.getenv("TAVILY_API_KEY"),
     max_results=3,
@@ -38,10 +39,10 @@ search = TavilySearchResults(
         "mohw.go.kr",     # 보건복지부
         "korea.kr",       # 정책브리핑
         "moel.go.kr",     # 고용노동부
-        "nps.or.kr",      # 국민연금
         "kordi.or.kr",    # 한국노인인력개발원
-        "bokjiro.go.kr",  # 복지로
-        "work.go.kr"      # 워크넷
+        "bokjiro.go.kr"  # 복지로
+        # "nps.or.kr",      # 국민연금
+        # "work.go.kr"      # 워크넷
     ],
     exclude_domains=[
         "wikipedia.org", "youtube.com", "facebook.com", "twitter.com"
@@ -49,53 +50,50 @@ search = TavilySearchResults(
     time_frame="3m"
 )
 
-POLICY_EXTRACTION_PROMPT = """주어진 웹 페이지의 내용에서 노인 관련 정책 정보를 찾아 정리해주세요.
-정보가 불명확하더라도 최대한 관련된 내용을 찾아서 제공해주세요.
+POLICY_EXTRACTION_PROMPT = """**정책 정보 추출 요청**  
+다음 웹 페이지에서 **고령층 관련 정책 정보**를 분석하여 정리해 주세요.  
+필수 항목을 정확하게 추출하고, 찾을 수 없는 정보는 `"정보 없음"`으로 표시하세요. 
 
 
-최종 답변은 반드시 아래 양식에 맞춰 답변해주세요:
+ **응답 형식**
 
 [결과 1] 
 - 출처: (기관명)
 - 제목: (제목)
-- 지원 대상: (연령, 자격요건 등을 대략. 없을 시 '고령층 대상' 이라고 표시)
+- 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
 - 주요 내용: (핵심 내용 요약)
 - 신청 방법: (신청 절차, 필요 서류 등)
-- 연락처: (담당기관, 문의처 등)
+- 연락처: (담당기관 및 전화번호, 문의처 등)
 - URL: (링크)
 
 [결과 2]
 - 출처: (기관명)
 - 제목: (제목)
-- 지원 대상: (연령, 자격요건 등을 대략. 없을 시 '고령층 대상' 이라고 표시)
+- 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
 - 주요 내용: (핵심 내용 요약)
 - 신청 방법: (신청 절차, 필요 서류 등)
-- 연락처: (담당기관, 문의처 등)
+- 연락처: (담당기관 및 전화번호, 문의처 등)
 - URL: (링크)
 
 [결과 3]
 - 출처: (기관명)
 - 제목: (제목)
-- 지원 대상: (연령, 자격요건 등을 대략. 없을 시 '고령층 대상' 이라고 표시)
+- 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
 - 주요 내용: (핵심 내용 요약)
 - 신청 방법: (신청 절차, 필요 서류 등)
-- 연락처: (담당기관, 문의처 등)
+- 연락처: (담당기관 및 전화번호, 문의처 등)
 - URL: (링크)
 
-질문: {input}
+**검색어:** {input}
 
-다음 형식으로 응답해주세요:
-Thought: 무엇을 해야할지 생각합니다
-Action: 사용할 도구 이름
-Action Input: 도구에 입력할 내용
-Observation: 도구의 결과를 확인합니다
-... (필요한 만큼 Thought/Action/Action Input/Observation 반복)
-Thought: 이제 최종 답변을 제공할 수 있습니다
-Final Answer: 위의 형식에 맞춰 검색 결과 요약과 종합 정보를 작성합니다
-웹 페이지 내용:
+📄 **웹 페이지 내용:**  
 {text}
 
-각 항목에 대해 최대한 구체적으로 작성해주세요. 정보를 찾을 수 없는 경우에만 '정보 미제공'으로 표시하세요."""
+ **주의 사항**
+- 모든 항목을 가능한 한 구체적으로 작성하세요.
+- 정보를 찾을 수 없는 경우 `"정보 없음"`으로 표기하세요.
+"""
+
 
 tools = [
     Tool(
@@ -141,8 +139,8 @@ agent_executor = AgentExecutor(
     tools=tools,
     verbose=True,
     handle_parsing_errors=True,
-    max_iterations=50,
-    max_execution_time=600
+    max_iterations=2,
+    max_execution_time=100
 )
 
 def extract_keywords(query: str) -> List[str]:
@@ -188,38 +186,30 @@ def extract_policy_info(content: str) -> Dict:
         extracted_text = response.content.strip()
 
         # 정보 추출 및 구조화
-        policy_info = {}
-        
-        # 출처 추출
-        source_match = re.search(r'출처:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["출처"] = source_match.group(1).strip() if source_match else "-"
-        
-        # 제목 추출
-        title_match = re.search(r'제목:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["제목"] = title_match.group(1).strip() if title_match else "-"
-        
-        # 지원 대상 추출
-        target_match = re.search(r'지원 대상:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["지원_대상"] = target_match.group(1).strip() if target_match else "-"
-        
-        # 주요 내용 추출
-        content_match = re.search(r'주요 내용:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["주요_내용"] = content_match.group(1).strip() if content_match else "-"
-        
-        # 신청 방법 추출
-        apply_match = re.search(r'신청 방법:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["신청_방법"] = apply_match.group(1).strip() if apply_match else "-"
-        
-        # 연락처 추출
-        contact_match = re.search(r'연락처:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["연락처"] = contact_match.group(1).strip() if contact_match else "-"
-        
-        # URL 추출
-        url_match = re.search(r'URL:\s*(.+?)(?:\n|$)', extracted_text, re.MULTILINE)
-        policy_info["URL"] = url_match.group(1).strip() if url_match else "-"
+        pattern_dict = {
+            "출처": r"출처:\s*(.+?)(?:\n|$)",
+            "제목": r"제목:\s*(.+?)(?:\n|$)",
+            "지원_대상": r"지원 대상:\s*(.+?)(?:\n|$)",
+            "주요_내용": r"주요 내용:\s*(.+?)(?:\n|$)",
+            "신청_방법": r"신청 방법:\s*(.+?)(?:\n|$)",
+            "연락처": r"연락처:\s*(.+?)(?:\n|$)",
+            "URL": r"URL:\s*(.+?)(?:\n|$)"
+        }
 
-        # 모든 값이 '-'인 경우 None 반환
-        if all(value == '-' for value in policy_info.values()):
+        # 기본값 "-"으로 초기화
+        policy_info = {key: "-" for key in pattern_dict}
+
+        # 정규식 적용하여 정보 추출
+        for key, pattern in pattern_dict.items():
+            try:
+                match = re.search(pattern, extracted_text, re.MULTILINE)
+                if match:
+                    policy_info[key] = match.group(1).strip() if match.group(1).strip() else "-"
+            except Exception as e:
+                logger.error(f"{key} 추출 중 오류 발생: {str(e)}")
+
+        # 모든 값이 "-"이면 None 반환
+        if all(value == "-" for value in policy_info.values()):
             return None
 
         return policy_info
