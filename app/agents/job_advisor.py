@@ -67,7 +67,7 @@ class JobAdvisorAgent:
 
         return EXTRACT_INFO_PROMPT | llm
 
-    def _extract_location_info(self, query: str) -> Dict[str, str]:
+    async def _extract_location_info(self, query: str) -> Dict[str, str]:
         """상세 지역 정보 추출 함수"""
         try:
             # 1. 시/도 및 구/군 매칭
@@ -98,7 +98,7 @@ class JobAdvisorAgent:
                     return {"city": "서울", "district": district}
 
             # 4. 매칭 실패 시 LLM에게 분석 요청
-            return self._analyze_location_with_llm(query)
+            return await self._analyze_location_with_llm(query)
 
         except Exception as e:
             logger.error(f"[JobAdvisor] 지역 정보 추출 중 에러: {str(e)}")
@@ -122,7 +122,7 @@ class JobAdvisorAgent:
             """)
 
             chain = location_prompt | self.llm | StrOutputParser()
-            result = chain.invoke({"query": query})
+            result = await chain.ainvoke({"query": query})
             
             try:
                 location_info = json.loads(result)
@@ -135,14 +135,14 @@ class JobAdvisorAgent:
             logger.error(f"[JobAdvisor] LLM 지역 분석 중 에러: {str(e)}")
             return {"city": "", "district": ""}
 
-    def _extract_user_ner(self, query: str, user_profile: Dict = None, chat_history: str = None) -> Dict[str, str]:
-        """사용자 입력에서 NER 정보 추출 (동기 함수로 변경)"""
+    async def _extract_user_ner(self, query: str, user_profile: Dict = None, chat_history: str = None) -> Dict[str, str]:
+        """사용자 입력에서 NER 정보 추출"""
         try:
             # 1. 먼저 사전을 이용한 직접 매칭 시도
             extracted_info = {"지역": "", "직무": "", "연령대": ""}
             
-            # 2. 상세 지역 정보 추출
-            location_info = self._extract_location_info(query)
+            # 여기서 await 추가
+            location_info = await self._extract_location_info(query)
             if location_info["city"]:
                 extracted_info["지역"] = f"{location_info['city']} {location_info['district']}".strip()
             
@@ -160,23 +160,16 @@ class JobAdvisorAgent:
 
             # 4. 사전 매칭으로 충분한 정보를 얻지 못한 경우 LLM 사용
             if not (extracted_info["지역"] or extracted_info["직무"]):
-                chain = EXTRACT_INFO_PROMPT | self.llm | StrOutputParser()
-                response = chain.invoke({
-                    "user_query": query,
-                    "chat_history": chat_history if chat_history else ""
-                })
-                
-                # JSON 파싱
-                cleaned = response.replace("```json", "").replace("```", "").strip()
-                llm_extracted = json.loads(cleaned)
+                # 여기만 수정: await 추가
+                llm_response = await self._analyze_location_with_llm(query)
                 
                 # LLM 결과와 사전 매칭 결과 병합
-                if not extracted_info["지역"] and llm_extracted.get("지역"):
-                    extracted_info["지역"] = llm_extracted["지역"]
-                if not extracted_info["직무"] and llm_extracted.get("직무"):
-                    extracted_info["직무"] = llm_extracted["직무"]
-                if llm_extracted.get("연령대"):
-                    extracted_info["연령대"] = llm_extracted["연령대"]
+                if not extracted_info["지역"] and llm_response.get("지역"):
+                    extracted_info["지역"] = llm_response["지역"]
+                if not extracted_info["직무"] and llm_response.get("직무"):
+                    extracted_info["직무"] = llm_response["직무"]
+                if llm_response.get("연령대"):
+                    extracted_info["연령대"] = llm_response["연령대"]
             
             # 5. 사용자 프로필 정보로 보완
             if user_profile:
@@ -189,7 +182,7 @@ class JobAdvisorAgent:
 
             logger.info(f"[JobAdvisor] 최종 추출 정보: {extracted_info}")
             return extracted_info
-
+            
         except Exception as e:
             logger.error(f"[JobAdvisor] NER 추출 중 오류: {str(e)}")
             return {"지역": "", "직무": "", "연령대": ""}
@@ -197,14 +190,14 @@ class JobAdvisorAgent:
     ###############################################################################
     # (B) 일반 대화/채용정보 검색 라우팅
     ###############################################################################
-    def retrieve(self, state: AgentState):
+    async def retrieve(self, state: AgentState):
         query = state['query']
         logger.info(f"[JobAdvisor] retrieve 시작 - 쿼리: {query}")
 
         # (1) 일반 대화 체크
         if not self.is_job_related(query):
             # 일상 대화 처리 -> LLM으로 전달 -> 구직 관련 대화 유도
-            response = self.chat_agent.chat(query)
+            response = await self.chat_agent.chat(query)
             return {
                 # ChatResponse 호환 형태
                 "message": response,  # answer
@@ -218,11 +211,22 @@ class JobAdvisorAgent:
         # (2) job 검색
         logger.info("[JobAdvisor] 채용정보 검색 시작")
         user_profile = state.get("user_profile", {})
-        user_ner = self._extract_user_ner(query, user_profile)
+        user_ner = await self._extract_user_ner(query, user_profile)
 
         try:
-            results = self.vector_search.search_jobs(user_ner=user_ner, top_k=10)
-            logger.info(f"[JobAdvisor] 검색 결과 수: {len(results)}")
+            # 기존 검색 결과가 있는지 확인
+            previous_results = user_profile.get('previous_results', []) if user_profile else []
+            
+            # 벡터 검색 수행
+            search_results = self.vector_search.search_jobs(
+                user_ner=user_ner,
+                top_k=10
+            )
+            
+            # 이전 결과와 중복 제거
+            search_results = [doc for doc in search_results if doc not in previous_results]
+
+            logger.info(f"[JobAdvisor] 검색 결과 수: {len(search_results)}")
         except Exception as e:
             logger.error(f"[JobAdvisor] 검색 중 에러 발생: {str(e)}", exc_info=True)
             return {
@@ -235,7 +239,7 @@ class JobAdvisorAgent:
             }
 
         # (3) 최대 5건만 추출
-        top_docs = results[:2]
+        top_docs = search_results[:2]
 
         # (4) Document -> JobPosting 변환
         job_postings = []
@@ -274,7 +278,7 @@ class JobAdvisorAgent:
             "jobPostings": job_postings,
             "type": res_type,
             "user_profile": user_profile,
-            "context": results,  # 다음 노드(verify 등)에서 사용
+            "context": search_results,  # 다음 노드(verify 등)에서 사용
             "query": query
         }
 
@@ -375,7 +379,7 @@ class JobAdvisorAgent:
         """채용정보 검색 처리"""
         try:
             # NER 추출 (동기 함수 호출)
-            user_ner = self._extract_user_ner(query, user_profile, chat_history)
+            user_ner = await self._extract_user_ner(query, user_profile, chat_history)
             
             # 2. 검색 수행
             job_postings = []
@@ -385,13 +389,12 @@ class JobAdvisorAgent:
                 
                 # 벡터 검색 수행
                 search_results = self.vector_search.search_jobs(
-                    user_ner={
-                        "직무": user_ner.get("직무", ""),
-                        "지역": user_ner.get("지역", ""),
-                        "연령대": user_ner.get("연령대", "")
-                    },
+                    user_ner=user_ner,
                     top_k=10
                 )
+                
+                # 이전 결과와 중복 제거
+                search_results = [doc for doc in search_results if doc not in previous_results]
                 
                 # 검색 결과를 job_postings 형식으로 변환
                 for i, doc in enumerate(search_results, start=1):
@@ -454,28 +457,28 @@ class JobAdvisorAgent:
                 "user_profile": user_profile
             }
 
-    async def chat(
-        self, 
-        message: str, 
-        user_profile: Dict = None,
-        chat_history: List[Dict] = None
-    ) -> Dict:
-        """사용자 메시지에 대한 응답 생성"""
-        try:
-            # 훈련과정 검색 의도 확인
-            if any(keyword in message for keyword in ["훈련", "교육", "과정", "배우고"]):
-                return await self.training_advisor.search_training_courses(
-                    query=message,
-                    user_profile=user_profile,
-                    chat_history=chat_history
-                )
+    # async def chat(
+    #     self, 
+    #     message: str, 
+    #     user_profile: Dict = None,
+    #     chat_history: List[Dict] = None
+    # ) -> Dict:
+    #     """사용자 메시지에 대한 응답 생성"""
+    #     try:
+    #         # 훈련과정 검색 의도 확인
+    #         if any(keyword in message for keyword in ["훈련", "교육", "과정", "배우고"]):
+    #             return await self.training_advisor.search_training_courses(
+    #                 query=message,
+    #                 user_profile=user_profile,
+    #                 chat_history=chat_history
+    #             )
             
-            # 기타 일반적인 대화 처리
-            # ... 기존 대화 처리 로직 ...
+    #         # 기타 일반적인 대화 처리
+    #         # ... 기존 대화 처리 로직 ...
             
-        except Exception as e:
-            logger.error(f"[JobAdvisor] 채팅 처리 중 오류: {str(e)}", exc_info=True)
-            return {
-                "message": "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다.",
-                "type": "error"
-            }
+    #     except Exception as e:
+    #         logger.error(f"[JobAdvisor] 채팅 처리 중 오류: {str(e)}", exc_info=True)
+    #         return {
+    #             "message": "죄송합니다. 요청을 처리하는 중에 문제가 발생했습니다.",
+    #             "type": "error"
+    #         }
