@@ -76,7 +76,6 @@ def process_tool_output_node(state: FlowState):
             
         # 로깅
         logger.info(f"[ProcessToolOutput] 최종 응답: {state.final_response}")
-        logger.info(f"[ProcessToolOutput] 채용정보 수: {len(state.jobPostings)}")
         
         # ChatResponse 형식에 맞게 응답 구성
         response = {
@@ -84,12 +83,12 @@ def process_tool_output_node(state: FlowState):
             "type": state.final_response.get("type", "chat"),
             "jobPostings": state.jobPostings,
             "trainingCourses": state.trainingCourses,
-            "user_profile": state.user_profile
+            "user_profile": state.user_profile,
+            "search_result": state.final_response.get("search_result", {})  # 정책 검색 결과 추가
         }
         
         # state 업데이트
         state.final_response = response
-        
         return state
 
     except Exception as e:
@@ -99,6 +98,7 @@ def process_tool_output_node(state: FlowState):
             "message": f"처리 중 오류 발생: {str(e)}",
             "type": "error",
             "jobPostings": [],
-            "trainingCourses": []
+            "trainingCourses": [],
+            "search_result": {}  # 빈 검색 결과
         }
         return state

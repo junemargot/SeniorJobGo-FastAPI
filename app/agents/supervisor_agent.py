@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import BaseTool
 from langchain.agents import create_react_agent, AgentExecutor
@@ -8,6 +8,9 @@ from langchain.agents import Tool
 import logging
 from app.models.flow_state import FlowState
 import json
+from app.agents.policy_agent import query_policy_agent
+from app.services.data_client import PublicDataClient
+
 logger = logging.getLogger(__name__)
 
 ###############################################################################
@@ -45,6 +48,13 @@ def build_supervisor_agent() -> AgentExecutor:
             func=meal_agent_tool_func,
             description="무료급식소 정보 검색. 무료급식, 급식소, 식사 등과 관련된 질문에 사용",
             coroutine=meal_agent_tool_func  # 비동기 함수 지정
+        ),
+        # 새로운 Tool 추가
+        Tool(
+            name="policy_advisor_tool",
+            func=policy_advisor_tool_func,
+            description="고령자 관련 정책 정보 검색. 정부지원, 복지, 연금 등과 관련된 질문에 사용",
+            coroutine=policy_advisor_tool_func  # 비동기 함수 지정
         )
     ]
 
@@ -103,6 +113,7 @@ class SupervisorAgent:
     
     def __init__(self, llm: ChatOpenAI):
         self.agent = build_supervisor_agent()
+        self.data_client = PublicDataClient()
     
     async def analyze_query(self, user_input: str, user_profile: dict = None, chat_history: str = "", user_ner: dict = None) -> dict:
         """사용자 입력 분석"""
@@ -306,8 +317,8 @@ async def chat_agent_tool_func(input_str: str) -> str:
             "type": "error"
         }, ensure_ascii=False)
 
-async def meal_agent_tool_func(input_str: str) -> str:
-    """무료급식소 정보 검색 도구"""
+async def policy_advisor_tool_func(input_str: str) -> str:
+    """정책 정보 검색 도구"""
     try:
         # 입력값 검증 및 파싱
         if not input_str:
@@ -325,19 +336,73 @@ async def meal_agent_tool_func(input_str: str) -> str:
         except json.JSONDecodeError:
             query = input_str
             
-        # FastAPI app state에서 meal_agent 가져오기
-        from app.main import app
-        meal_agent = app.state.meal_agent
+        # policy_agent 호출
+        response = query_policy_agent(query)
         
-        # meal_agent 호출
-        response = meal_agent.generate_response(query, user_profile, user_ner)
-        
-        # 응답 형식화
+        # 응답이 이미 dict인 경우 JSON으로 변환
+        if isinstance(response, dict):
+            response["type"] = "policy"
+            if "search_result" not in response:
+                response["search_result"] = {"policies": []}
+            return json.dumps(response, ensure_ascii=False)
+            
+        # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "meal",
+            "type": "policy",
+            "search_result": {"policies": []},
             "final_answer": str(response)
         }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error(f"[policy_advisor_tool] 오류: {str(e)}", exc_info=True)
+        return json.dumps({
+            "message": f"정책 정보 검색 중 오류: {str(e)}",
+            "type": "error",
+            "search_result": {"policies": []}
+        }, ensure_ascii=False)
+
+async def meal_agent_tool_func(input_str: str) -> str:
+    """무료급식소 검색 도구"""
+    try:
+        # 입력값 검증 및 파싱
+        if not input_str:
+            raise ValueError("입력값이 비어있습니다")
+            
+        # 입력값이 문자열인지 확인하고 파싱
+        if not isinstance(input_str, str):
+            input_str = json.dumps(input_str, ensure_ascii=False)
+            
+        try:
+            data = json.loads(input_str)
+        except json.JSONDecodeError:
+            data = {"query": input_str, "user_profile": {}}
+        
+        logger.info(f"[meal_agent_tool] input_str: {input_str}")
+
+        user_ner = data.get("user_ner", {})
+        region = user_ner.get("지역", "")
+        
+        # data_client 호출
+        from app.main import app
+        data_client = app.state.data_client
+        
+        # 전체 데이터 가져오기
+        all_services = data_client.fetch_meal_services()
+        
+        # 지역 필터링
+        if region:
+            filtered_services = data_client.filter_by_region(all_services, region)
+        else:
+            filtered_services = all_services[:5]  # 지역이 없으면 상위 5개만
+            
+        response = {
+            "message": f"{region or '전국'}의 무료급식소 정보입니다.",
+            "type": "meal",
+            "meal_services": filtered_services[:5]
+        }
+        
+        return json.dumps(response, ensure_ascii=False)
         
     except Exception as e:
         logger.error(f"[meal_agent_tool] 오류: {str(e)}", exc_info=True)
