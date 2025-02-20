@@ -91,7 +91,7 @@ Thought: {agent_scratchpad}
         agent=react_agent,
         tools=tools,
         handle_parsing_errors=True,
-        max_iterations=2,  # 반복 횟수 더 제한
+        max_iterations=1,  # 반복 횟수 더 제한
         max_execution_time=None,  # 시간 제한 제거
         early_stopping_method="force",  # generate -> force로 변경
         return_intermediate_steps=True,  # 중간 단계 결과 반환
