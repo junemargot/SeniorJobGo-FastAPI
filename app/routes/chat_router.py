@@ -14,6 +14,8 @@ from db.routes_auth import get_user_info_by_cookie
 import os
 import json
 import time
+from typing import List, Dict
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,30 @@ def get_job_advisor_agent(request: Request):
 
 def get_chat_agent(request: Request, llm=Depends(get_llm)):
     return ChatAgent(llm=llm)
+
+async def format_chat_history(messages: List[Dict]) -> str:
+    """MongoDB에서 가져온 메시지를 문자열로 변환"""
+    history = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "user":
+            history.append(f"User: {content}")
+        elif role == "assistant":
+            history.append(f"Assistant: {content}")
+    return "\n".join(history[-5:])  # 최근 5개 메시지만 사용
+
+async def save_chat_message(user_id: str, message: Dict) -> bool:
+    """새로운 메시지를 사용자의 대화 기록에 저장"""
+    try:
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$push": {"messages": message}}
+        )
+        return True
+    except Exception as e:
+        logger.error(f"메시지 저장 중 오류: {str(e)}")
+        return False
 
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
@@ -62,6 +88,10 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 error_message="사용자 정보를 찾을 수 없습니다."
             )
 
+        # chat_history 가져오기
+        messages = user.get("messages", [])
+        chat_history = await format_chat_history(messages)
+
         # NER 추출
         extracted_ner = await extract_ner(
             user_input=chat_request.user_message,
@@ -69,14 +99,10 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             user_profile=chat_request.user_profile
         )
 
-        # chat_history를 문자열로 변환
-        chat_history = json.dumps(user.get("messages", []), ensure_ascii=False) if user else ""
-
         # 워크플로우 초기 상태 설정
         initial_state = FlowState(
             query=chat_request.user_message,
-            # chat_history=chat_history,  # 문자열로 변환된 chat_history 사용
-            chat_history="",  # test
+            chat_history=chat_history,  # 포맷된 chat_history 사용
             user_profile=chat_request.user_profile or {},
             agent_type="",
             agent_reason="",
@@ -122,6 +148,31 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             )
             
             logger.info(f"[ChatRouter] 최종 응답: {response}")
+
+            # 사용자 메시지 저장
+            user_message = {
+                "role": "user",
+                "content": chat_request.user_message,
+                "timestamp": datetime.now(),
+                "type": "chat"
+            }
+            await save_chat_message(user["_id"], user_message)
+            
+            # 응답 생성 후
+            assistant_message = {
+                "role": "assistant",
+                "content": response.message,
+                "timestamp": datetime.now(),
+                "type": response.type,
+                "metadata": {
+                    "jobPostings": len(response.jobPostings),
+                    "trainingCourses": len(response.trainingCourses),
+                    "policyPostings": len(response.policyPostings),
+                    "mealPostings": len(response.mealPostings)
+                }
+            }
+            await save_chat_message(user["_id"], assistant_message)
+            
             return response
 
         except Exception as parse_error:

@@ -3,14 +3,16 @@
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class ChatModel(BaseModel):
     index: int = Field(..., ge=0)  # 대화 인덱스. 0 이상
-    role: str = Field(..., pattern="^(user|bot)$")  # 대화 역할. 'user' 또는 'bot'만 허용
     content: str = Field(..., min_length=1)  # 대화 내용. 최소 1자
-    created_at: datetime = Field(default_factory=datetime.now)  # 대화 생성 시간
+    role: str = Field(..., pattern="^(user|assistant)$")  # 'user' 또는 'assistant'로 통일
+    timestamp: datetime = Field(default_factory=datetime.now)
+    type: str = Field(default="chat")  # chat, job, training, policy, meal 등
+    metadata: Dict[str, Any] = Field(default_factory=dict)  # 추가 데이터 저장용
 
 class UserModel(BaseModel):
     id: str = Field(..., min_length=3, max_length=50)  # 사용자 아이디. 최소 3자, 최대 50자
