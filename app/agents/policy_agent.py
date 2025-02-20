@@ -98,7 +98,7 @@ POLICY_EXTRACTION_PROMPT = """**정책 정보 추출 요청**
 tools = [
     Tool(
         name="Web_Search",
-        description="최근 6개월 내의 중장년층 관련 정보나 뉴스를 웹에서 검색합니다.",
+        description="2024년 10월 이후에 등록된 중장년층 관련 정보나 뉴스를 웹에서 검색합니다.",
         func=partial(search.run)  # 함수 바인딩 문제 해결
     )
 ]
@@ -171,12 +171,11 @@ def extract_policy_info(content: str) -> Dict:
         if len(content) > 2000:
             content = content[:2000]
 
-        # POLICY_EXTRACTION_PROMPT 사용
         messages = [
             {
                 "role": "system",
                 "content": POLICY_EXTRACTION_PROMPT.format(
-                    input="노인 정책 정보를 추출해주세요",  # 기본 질문
+                    input="2024년 10월 이후에 등록된 중장년층 관련 정책 정보를 추출해주세요",
                     text=content  # 웹페이지 내용
                 )
             }
