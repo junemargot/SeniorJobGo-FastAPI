@@ -11,6 +11,9 @@ from typing import Optional
 import os
 from dataclasses import dataclass
 from langchain.chat_models import ChatOpenAI
+from app.database.mongodb import get_database
+from app.models.schemas import ResumeData, ResumeResponse
+from dotenv import load_dotenv
 
 
 # 로컬 스키마 정의
@@ -26,11 +29,12 @@ class ResumeData(BaseModel):
     additional_info: str = ""
 
 
+# 일반 클래스에서 Pydantic BaseModel로 변경
 class ResumeResponse(BaseModel):
     type: str
     message: str
     html_content: Optional[str] = None
-    resume_data: Optional[dict] = None
+    resume_data: Optional[Dict] = None
     required_fields: Optional[List[str]] = None
 
 
@@ -120,15 +124,10 @@ class ResumeAdvisor:
 
 class ResumeAdvisorAgent:
     def __init__(self, llm):
+        load_dotenv()
+
         self.llm = llm
-        self.steps = [
-            "personal_info",
-            "education",
-            "work_experience",
-            "skills",
-            "certificates",
-            "self_introduction",
-        ]
+        self.db = get_database()
         self.current_step = None
 
     async def start_conversation(self) -> AdvisorResponse:
@@ -198,179 +197,68 @@ class ResumeAdvisorAgent:
     ) -> str:
         try:
             html_template = f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>이력서</title>
-    <style>
-        body {{ padding: 20px; font-family: 'Pretendard', sans-serif; }}
-        h1 {{ text-align: center; margin-bottom: 40px; }}
-        h3 {{ color: #2D3748; border-bottom: 2px solid #4299E1; padding-bottom: 5px; margin-top: 30px; }}
-        .resume-section {{ margin-bottom: 25px; }}
-        input, textarea {{ width: 100%; padding: 8px; margin: 4px 0; border: 1px solid #E2E8F0; border-radius: 4px; }}
-        textarea {{ min-height: 100px; resize: vertical; }}
-        .info-row {{ display: flex; margin-bottom: 10px; }}
-        .info-label {{ width: 80px; font-weight: bold; color: #4A5568; }}
-        .button-container {{ margin-top: 20px; }}
-        .experience-item {{ margin-bottom: 15px; }}
-        .company-info {{ font-weight: bold; margin-bottom: 5px; }}
-        .job-description {{ color: #4A5568; }}
-    </style>
-</head>
-<body>
-<div class="resume-container">
-    <h1>이력서</h1>
-
-    <div class="resume-section">
-        <h3>기본 정보</h3>
-        <div class="info-row">
-            <div class="info-label">이름:</div>
-            <div>{"<input type='text' placeholder='이름을 입력하세요'>" if edit_mode else resume_data.name}</div>
-        </div>
-        <div class="info-row">
-            <div class="info-label">연락처:</div>
-            <div>{"<input type='tel' placeholder='연락처를 입력하세요'>" if edit_mode else resume_data.phone}</div>
-        </div>
-        <div class="info-row">
-            <div class="info-label">이메일:</div>
-            <div>{"<input type='email' placeholder='이메일을 입력하세요'>" if edit_mode else resume_data.email}</div>
-        </div>
-    </div>
-
-    <div class="resume-section">
-        <h3>학력 사항</h3>
-        {"<input type='text' placeholder='학교/전공/학위/졸업연도를 입력하세요'>" if edit_mode else 
-        '<div>' + '<br>'.join([f"{edu.school} {edu.major}" for edu in resume_data.education]) + '</div>'}
-    </div>
-
-    <div class="resume-section">
-        <h3>경력 사항</h3>
-        {"<div class='experience-item'><input type='text' placeholder='회사명/직위/기간을 입력하세요'><textarea placeholder='업무 내용을 입력하세요'></textarea></div>" if edit_mode else 
-        '<div>' + '<br>'.join([f"<div class='experience-item'><div class='company-info'>{exp.company} {exp.position} {exp.period}</div><div class='job-description'>{exp.description}</div></div>" for exp in resume_data.experience]) + '</div>'}
-    </div>
-
-    <div class="resume-section">
-        <h3>희망직무</h3>
-        {"<input type='text' placeholder='희망하는 직무를 입력하세요'>" if edit_mode else resume_data.desired_job}
-    </div>
-
-    <div class="resume-section">
-        <h3>보유기술 및 자격</h3>
-        {"<input type='text' placeholder='보유한 기술이나 자격증을 입력하세요'>" if edit_mode else resume_data.skills}
-    </div>
-
-    <div class="resume-section">
-        <h3>자기소개서</h3>
-        {"<textarea placeholder='자기소개서를 입력하세요'></textarea>" if edit_mode else resume_data.additional_info}
-    </div>
-
-    {"<div class='button-container' style='display:flex;flex-direction:column;gap:5px'>" if edit_mode else ""}
-    {"<button type='button' onclick='downloadResume()' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%'>이력서 다운로드</button>" if edit_mode else ""}
-    {"<button type='button' onclick='sendResumeEmail()' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%;margin-top:5px'>이메일로 보내기</button>" if edit_mode else ""}
-    {"<button type='button' onclick='window.close()' style='padding:8px;background:#f8f9fa;color:#212529;border:none;border-radius:4px;cursor:pointer;width:100%;margin-top:5px'>취소</button>" if edit_mode else ""}
-    {"</div>" if edit_mode else ""}
-
-    <script>
-    {'''
-    function getValue(selector) {
-        const element = document.querySelector(selector);
-        return element ? element.value : '';
-    }
-
-    function downloadResume() {
-        const API_BASE_URL = 'http://localhost:8000/api/v1';
-        
-        const formData = {
-            name: getValue('input[placeholder="이름을 입력하세요"]'),
-            email: getValue('input[placeholder="이메일을 입력하세요"]'),
-            phone: getValue('input[placeholder="연락처를 입력하세요"]'),
-            education: getValue('input[placeholder="학교/전공/학위/졸업연도를 입력하세요"]'),
-            experience: {
-                company: getValue('input[placeholder="회사명/직위/기간을 입력하세요"]'),
-                description: getValue('textarea[placeholder="업무 내용을 입력하세요"]')
-            },
-            desired_job: getValue('input[placeholder="희망하는 직무를 입력하세요"]'),
-            skills: getValue('input[placeholder="보유한 기술이나 자격증을 입력하세요"]'),
-            intro: getValue('textarea[placeholder="자기소개서를 입력하세요"]')
-        };
-
-        fetch(`${API_BASE_URL}/resume/download/temp`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            if (!response.ok) throw new Error('PDF 생성 실패');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `이력서_${new Date().getTime()}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        })
-        .catch(error => {
-            console.error('다운로드 오류:', error);
-            alert('이력서 다운로드 중 오류가 발생했습니다.');
-        });
-    }
-
-    function sendResumeEmail() {
-        const API_BASE_URL = 'http://localhost:8000/api/v1';
-        const email = prompt('이메일 주소를 입력하세요:');
-        if (!email) return;
-
-        const formData = {
-            name: getValue('input[placeholder="이름을 입력하세요"]'),
-            email: getValue('input[placeholder="이메일을 입력하세요"]'),
-            phone: getValue('input[placeholder="연락처를 입력하세요"]'),
-            education: [{
-                school: getValue('input[placeholder="학교/전공/학위/졸업연도를 입력하세요"]'),
-                major: "",
-                degree: "",
-                year: 0
-            }],
-            experience: [{
-                company: getValue('input[placeholder="회사명/직위/기간을 입력하세요"]'),
-                position: "",
-                period: "",
-                description: getValue('textarea[placeholder="업무 내용을 입력하세요"]')
-            }],
-            desired_job: getValue('input[placeholder="희망하는 직무를 입력하세요"]'),
-            skills: getValue('input[placeholder="보유한 기술이나 자격증을 입력하세요"]'),
-            additional_info: getValue('textarea[placeholder="자기소개서를 입력하세요"]'),
-            receiver_email: email
-        };
-
-        fetch(`${API_BASE_URL}/resume/send-email`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            if (!response.ok) throw new Error('이메일 전송 실패');
-            alert('이력서가 이메일로 전송되었습니다.');
-        })
-        .catch(error => {
-            console.error('이메일 전송 오류:', error);
-            alert('이메일 전송 중 오류가 발생했습니다.');
-        });
-    }
-    '''}
-    </script>
-</div></body></html>"""
+            <html lang="ko">
+            <head>
+                <meta charset="UTF-8">
+                <title>이력서</title>
+                <style>
+                    body {{ padding: 20px; font-family: 'Pretendard', sans-serif; }}
+                    h1 {{ text-align: center; margin-bottom: 40px; }}
+                    h3 {{ color: #2D3748; border-bottom: 2px solid #4299E1; padding-bottom: 5px; margin-top: 30px; }}
+                    .resume-section {{ margin-bottom: 25px; }}
+                </style>
+            </head>
+            <body>
+                <h1>이력서</h1>
+                <div id="resume-form"></div>
+            </body>
+            </html>"""
             return html_template
 
         except Exception as e:
             logger.error(f"이력서 템플릿 생성 중 오류: {str(e)}")
+            raise
+
+    async def generate_intro(self, resume_data: ResumeData) -> str:
+        try:
+            prompt = f"""
+            당신은 노인 일자리 전문 취업 컨설턴트입니다. 
+            다음 정보를 바탕으로 노인 일자리에 적합한 전문적이고 진정성 있는 자기소개서를 작성해주세요:
+
+            지원자 정보:
+            이름: {resume_data.name}
+            학력: {resume_data.education}
+            경력: {resume_data.experience}
+            보유기술: {resume_data.skills}
+            희망직무: {resume_data.desired_job}
+
+            작성 시 다음 사항을 고려해주세요:
+            1. 풍부한 인생 경험과 성실성을 강조
+            2. 오랜 경력을 통해 쌓은 전문성과 노하우 부각
+            3. 책임감과 신뢰성 있는 태도 강조
+            4. 체력적인 부분보다는 경험과 지혜를 바탕으로 한 역량 강조
+            5. 안정적이고 장기적인 근무 가능성 언급
+
+            자기소개서에 반드시 포함할 내용:
+            1. 지원 동기 (오랜 경험을 바탕으로 한 직무에 대한 이해)
+            2. 핵심 역량 (과거 경력에서 얻은 실질적인 노하우)
+            3. 직무 적합성 (성실성, 책임감, 노하우를 중심으로)
+            4. 입사 후 포부 (안정적이고 장기적인 근무 의지)
+
+            톤앤매너:
+            - 겸손하면서도 자신감 있는 어조
+            - 진정성 있고 신뢰감을 주는 표현
+            - 간결하고 명확한 문장
+            - 존중받는 시니어로서의 품격 유지
+
+            분량: 800자 내외
+            """
+
+            response = await self.llm.ainvoke(prompt)
+            return response.content
+
+        except Exception as e:
+            logger.error(f"자기소개서 생성 중 오류: {str(e)}")
             raise
 
     async def analyze_chat_history(self, user_id):

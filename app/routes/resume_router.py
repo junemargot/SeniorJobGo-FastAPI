@@ -1,27 +1,53 @@
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse, FileResponse, Response
-from app.agents.resume_advisor import ResumeAdvisorAgent, ResumeResponse
+from app.agents.resume_advisor import ResumeAdvisorAgent
 from app.database.mongodb import get_database
 from pydantic import BaseModel
 from app.agents.send_mail_agent import SendMailAgent
-
-from app.models.schemas import ResumeRequest, ResumeData, Education, Experience
+from app.agents.elderly_resume_agent import ElderlyResumeAgent
 import logging
-from typing import Dict
+from typing import Dict, List, Optional
 import pdfkit  # pip install pdfkit
+import asyncio
+from app.models.schemas import ResumeResponse, ResumeData
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from dotenv import load_dotenv
+import os
 
-router = APIRouter(tags=["resume"])
+router = APIRouter(tags=["resume"], prefix="/resume")
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+openai_api_key = os.getenv("OPENAI_API_KEY")
 
-# 전역 변수로 초기화하지 않고 의존성 주입 사용
+
+# 의존성 함수들을 먼저 정의
 def get_resume_advisor_agent(request: Request) -> ResumeAdvisorAgent:
     return request.app.state.resume_advisor_agent
+
+
+def get_elderly_resume_agent(request: Request) -> ElderlyResumeAgent:
+    return request.app.state.elderly_resume_agent
 
 
 # 요청 데이터 모델 추가
 class ResumeStartRequest(BaseModel):
     session_id: str
+
+
+class Experience(BaseModel):
+    company: Optional[str] = ""
+    position: Optional[str] = ""
+    period: Optional[str] = ""
+    description: Optional[str] = ""
+
+
+class ResumeData(BaseModel):
+    name: Optional[str] = ""
+    experience: Optional[List[Experience]] = []
+    skills: Optional[str] = ""
+    desired_job: Optional[List[str]] = []
 
 
 @router.post("/create", response_model=ResumeResponse)
@@ -333,41 +359,34 @@ async def download_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 요청 데이터 모델 추가
-class ResumeEditRequest(BaseModel):
-    resume_id: str
-
-
-@router.post("/resume/edit")
-async def edit_resume(
-    request: ResumeEditRequest,
-    resume_advisor: ResumeAdvisorAgent = Depends(get_resume_advisor_agent),
-):
+@router.post("/edit")
+async def edit_resume(request: Request):
     try:
-        # 빈 이력서 데이터로 시작
-        resume_data = ResumeData(
-            name="",
-            email="",
-            phone="",
-            contact="",
-            education=[],
-            experience=[],
-            desired_job="",
-            skills="",
-            additional_info="",
-        )
-
-        html_content = await resume_advisor.create_resume_template(
-            resume_data, edit_mode=True
-        )
-
-        return {
-            "message": "이력서 수정 모드입니다.",
-            "html_content": html_content,
-            "resume_data": resume_data.dict(),
+        # 초기 데이터를 React와 동일한 구조로 설정
+        resume_data = {
+            "name": "",
+            "email": "",
+            "phone": "",
+            "contact": "",
+            "education": [{"school": "", "major": "", "degree": "", "year": ""}],
+            "experience": [
+                {"company": "", "position": "", "period": "", "description": ""}
+            ],
+            "desired_job": "",
+            "skills": "",
+            "additional_info": "",
         }
+
+        response = {
+            "status": "success",
+            "message": "이력서 수정 모드입니다.",
+            "resume_data": resume_data,
+        }
+
+        return response
+
     except Exception as e:
-        logger.error(f"이력서 수정 중 오류: {str(e)}")
+        print("Error in edit_resume:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -385,13 +404,9 @@ async def send_resume_email(
         # 이메일 에이전트 초기화
         email_agent = SendMailAgent()
 
-        # 이메일 전송
-        subject = "이력서 첨부"
-        receiver_email = resume_data.get("receiver_email")
-
-        # process_email 메서드 사용
+        # 이메일 생성 및 전송
         result = await email_agent.process_email(
-            subject=subject, body=resume_html, receiver_email=receiver_email
+            resume_data=resume_data, receiver_email=resume_data.get("receiver_email")
         )
 
         if "성공" in result:
@@ -401,4 +416,121 @@ async def send_resume_email(
 
     except Exception as e:
         logger.error(f"이메일 전송 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-intro")
+async def generate_intro(data: ResumeData):
+    try:
+        llm = ChatOpenAI(
+            api_key=openai_api_key,  # API 키 명시적 설정
+            model_name="gpt-4o-mini",
+            temperature=0.7,
+        )
+
+        # 데이터 준비
+        experience_text = (
+            "\n".join(
+                [
+                    f"- {exp.company}에서 {exp.position}으로 {exp.period} 근무"
+                    for exp in data.experience
+                    if exp.company
+                ]
+            )
+            if data.experience
+            else "신규 취업 희망"
+        )
+
+        # 프롬프트 템플릿 작성
+        prompt = ChatPromptTemplate.from_template(
+            """
+        다음 정보를 바탕으로 시니어 구직자를 위한 자기소개서를 작성해주세요:
+
+        이름: {name}
+        희망 직종: {desired_jobs}
+        보유 기술 및 장점: {skills}
+        경력: {experience}
+
+        다음 사항을 고려해서 작성해주세요:
+        1. 시니어의 강점을 부각시켜주세요
+        2. 성실함과 책임감을 강조해주세요
+        3. 간단명료하게 작성해주세요
+        4. 경험을 바탕으로 한 실제적인 장점을 언급해주세요
+        """
+        )
+
+        # 프롬프트에 데이터 적용
+        formatted_prompt = prompt.format(
+            name=data.name or "지원자",
+            desired_jobs=(
+                ", ".join(data.desired_job) if data.desired_job else "다양한 분야"
+            ),
+            skills=data.skills or "성실함과 책임감",
+            experience=experience_text,
+        )
+
+        # GPT-4로 자기소개서 생성
+        response = llm.invoke(formatted_prompt)
+
+        return {"content": response.content}
+    except Exception as e:
+        logger.error(f"자기소개서 생성 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/download/temp")
+async def download_resume(resume_data: ResumeData):
+    try:
+        # PDF 생성 옵션
+        config = pdfkit.configuration(
+            wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+        )
+
+        options = {
+            "encoding": "UTF-8",
+            "page-size": "A4",
+            "margin-top": "0.75in",
+            "margin-right": "0.75in",
+            "margin-bottom": "0.75in",
+            "margin-left": "0.75in",
+            "enable-local-file-access": True,
+        }
+
+        # 프론트엔드에서 전달받은 HTML을 그대로 사용
+        pdf = pdfkit.from_string(
+            resume_data.html_content,  # 프론트엔드에서 전달받은 HTML
+            False,
+            configuration=config,
+            options=options,
+        )
+
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=resume.pdf"},
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze")
+async def analyze_resume(
+    resume_data: Dict,
+    elderly_agent: ElderlyResumeAgent = Depends(get_elderly_resume_agent),
+):
+    try:
+        # 여러 분석 동시 실행
+        results = await asyncio.gather(
+            elderly_agent.analyze_strengths(resume_data),
+            elderly_agent.suggest_improvements(resume_data),
+            elderly_agent.provide_interview_tips(resume_data),
+        )
+
+        return {
+            "strengths": results[0]["strengths"],
+            "improvements": results[1]["suggestions"],
+            "interview_tips": results[2]["interview_tips"],
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

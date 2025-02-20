@@ -1,31 +1,28 @@
-import resend
 import os
+import resend
 from dotenv import load_dotenv
 
 load_dotenv()
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 
-def send_email(subject: str, body: str, receiver_email: str) -> bool:
+def send_email(subject: str, body: str, receiver_email: str, attachments=None):
     try:
-        resend.api_key = os.getenv("RESEND_API_KEY")
+        params = {
+            "from": "Senior JobGo <onboarding@resend.dev>",
+            "to": receiver_email,
+            "subject": subject,
+            "html": body.replace("\n", "<br>"),  # 줄바꿈을 HTML로 변환
+        }
 
-        response = resend.Emails.send(
-            {
-                "from": "Senior JobGo <onboarding@resend.dev>",
-                "to": receiver_email,
-                "subject": subject,
-                "html": body,
-            }
-        )
+        # 첨부파일이 있는 경우
+        if attachments:
+            params["attachments"] = attachments
 
-        # response는 dictionary 형태로 반환됨
-        if response and isinstance(response, dict) and "id" in response:
-            print(f"이메일 전송 성공: {response['id']}")
-            return True
-        else:
-            print(f"이메일 전송 실패: 응답 형식 오류 - {response}")
-            return False
+        response = resend.Emails.send(params)
+
+        return True if response and "id" in response else False
 
     except Exception as e:
-        print(f"이메일 전송 오류: {str(e)}")
+        print(f"이메일 전송 실패: {str(e)}")
         return False

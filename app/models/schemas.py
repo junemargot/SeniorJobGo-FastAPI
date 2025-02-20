@@ -52,29 +52,44 @@ class ChatResponse(BaseModel):
 
 
 class Education(BaseModel):
-    school: str
-    major: str
-    degree: str
-    year: int
+    school: str = ""
+    major: str = ""
+    degree: str = ""
+    year: int = 0
 
 
 class Experience(BaseModel):
-    company: str
-    position: str
-    period: str
-    description: Optional[str] = None
+    company: str = ""
+    position: str = ""
+    period: str = ""
+    description: str = ""
 
 
 class ResumeData(BaseModel):
-    name: str
-    email: str
-    phone: str
-    contact: Optional[str] = None
-    education: List[Education]
-    experience: List[Experience]
-    desired_job: str
-    skills: str
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    contact: str = ""
+    education: List[Education] = []
+    experience: List[Experience] = []
+    desired_job: str = ""
+    skills: str = ""
     additional_info: str = ""
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "",
+                "email": "",
+                "phone": "",
+                "contact": "",
+                "education": [],
+                "experience": [],
+                "desired_job": "",
+                "skills": "",
+                "additional_info": "",
+            }
+        }
 
 
 class ResumeRequest(BaseModel):
@@ -85,3 +100,9 @@ class ResumeRequest(BaseModel):
 class ResumeResponse(BaseModel):
     message: str
     resume: ResumeData
+
+
+class AdvisorResponse(BaseModel):
+    content: str
+    suggestions: Optional[List[str]] = None
+    next_step: Optional[str] = None
