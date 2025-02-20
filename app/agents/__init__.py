@@ -2,10 +2,10 @@
 Agent 초기화 및 상태 저장 모듈
 """
 
-from fastapi import FastAPI
+from langchain_openai import ChatOpenAI
 from app.agents.job_advisor import JobAdvisorAgent
 from app.agents.training_advisor import TrainingAdvisorAgent
-from langchain_openai import ChatOpenAI
+from fastapi import FastAPI
 
 def initialize_agents(app: FastAPI):
     """

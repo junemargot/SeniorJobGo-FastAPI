@@ -1,48 +1,45 @@
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+# 패키지 임포트
 import logging
-from app.models.schemas import ChatRequest, ChatResponse, JobPosting, TrainingCourse
+import time
+from fastapi import APIRouter, Request, HTTPException, Depends
 
+# 에이전트 관련 임포트
+from app.agents.chat_agent import ChatAgent
+from app.agents.job_advisor import JobAdvisorAgent
+from app.agents.policy_agent import query_policy_agent
+
+# 스키마 관련 임포트
+from app.models.schemas import ChatRequest, ChatResponse, JobPosting, PolicySearchRequest, TrainingCourse
+
+# 데이터베이스 관련 임포트
 from db.database import db
 from db.routes_auth import get_user_info_by_cookie
 from db.routes_chat import add_chat_message
-from bson import ObjectId
-from app.agents.job_advisor import JobAdvisorAgent
-from app.agents.chat_agent import ChatAgent
 
-import os
-import json
-import time
-from typing import Optional, Dict, Any
-from app.agents.policy_agent import query_policy_agent
-
-
+# 로깅 설정
 logger = logging.getLogger(__name__)
 
+# 라우터 설정
 router = APIRouter()
-
-# 정책 검색 요청 모델 정의
-class PolicySearchRequest(BaseModel):
-    """정책 검색 요청 모델"""
-    user_message: str
-    user_profile: Dict = {}
-    session_id: Optional[str] = None
 
 # 이전 대화 내용을 저장할 딕셔너리
 conversation_history = {}
 
 # 의존성 함수들
 def get_llm(request: Request):
+    """LLM 의존성 함수"""
     return request.app.state.llm
 
 def get_vector_search(request: Request):
+    """벡터 검색 의존성 함수"""
     return request.app.state.vector_search
 
 def get_job_advisor_agent(request: Request):
+    """직업 상담사 에이전트 의존성 함수"""
     return request.app.state.job_advisor_agent
 
 def get_chat_agent(request: Request, llm=Depends(get_llm)):
+    """채팅 에이전트 의존성 함수"""
     return ChatAgent(llm=llm)
 
 @router.post("/chat/", response_model=ChatResponse)
@@ -51,6 +48,7 @@ async def chat(
     chat_request: ChatRequest,
     job_advisor_agent: JobAdvisorAgent = Depends(get_job_advisor_agent)
 ) -> ChatResponse:
+    """채팅 라우터"""
     start_time = time.time()
     try:
         # 요청 시작 로깅

@@ -1,13 +1,16 @@
-from langchain_openai import ChatOpenAI
+# langchain 관련 모듈
 from langchain.agents import Tool, AgentExecutor, create_react_agent
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_community.tools.tavily_search import TavilySearchResults
-from typing import Dict, List
-import os
-from dotenv import load_dotenv
+
+# 표준 라이브러리
 import logging
-from functools import partial
+import os
 import re
+from dotenv import load_dotenv
+from functools import partial
+from typing import Dict, List
 
 # 로깅 설정 보완
 logging.basicConfig(
@@ -171,6 +174,7 @@ def extract_policy_info(content: str) -> Dict:
         if len(content) > 2000:
             content = content[:2000]
 
+        # POLICY_EXTRACTION_PROMPT 사용
         messages = [
             {
                 "role": "system",
