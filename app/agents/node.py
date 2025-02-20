@@ -83,8 +83,8 @@ def process_tool_output_node(state: FlowState):
             "type": state.final_response.get("type", "chat"),
             "jobPostings": state.jobPostings,
             "trainingCourses": state.trainingCourses,
+            "policyPostings": state.policyPostings,
             "user_profile": state.user_profile,
-            "search_result": state.final_response.get("search_result", {})  # 정책 검색 결과 추가
         }
         
         # state 업데이트
@@ -99,6 +99,6 @@ def process_tool_output_node(state: FlowState):
             "type": "error",
             "jobPostings": [],
             "trainingCourses": [],
-            "search_result": {}  # 빈 검색 결과
+            "policyPostings": []  # 빈 검색 결과
         }
         return state

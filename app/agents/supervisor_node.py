@@ -4,6 +4,8 @@ from app.models.flow_state import FlowState
 from app.agents.supervisor_agent import SupervisorAgent
 from langchain_openai import ChatOpenAI
 from langchain_core.agents import AgentAction
+
+
 logger = logging.getLogger(__name__)
 
 async def supervisor_node(state: FlowState):
@@ -33,19 +35,22 @@ async def supervisor_node(state: FlowState):
                     if isinstance(step[0], AgentAction):
                         try:
                             tool_result = json.loads(step[1])
-                            if tool_result.get("type") in ["job", "training", "chat", "error"]:
-                                # jobPostings와 trainingCourses 저장
+                            if tool_result.get("type") in ["job", "training", "policy", "chat", "error"]:
+                                # 직접 값을 할당
                                 state.jobPostings = tool_result.get("jobPostings", [])
                                 state.trainingCourses = tool_result.get("trainingCourses", [])
-                                
+                                state.policyPostings = tool_result.get("policyPostings", [])
                                 state.final_response = {
                                     "message": tool_result.get("final_answer", ""),
                                     "type": tool_result.get("type", "chat"),
                                     "jobPostings": state.jobPostings,  # 저장된 값 사용
-                                    "trainingCourses": state.trainingCourses  # 저장된 값 사용
+                                    "trainingCourses": state.trainingCourses,  # 저장된 값 사용
+                                    "policyPostings": state.policyPostings  # 저장된 값 사용
                                 }
                                 logger.info(f"[SupervisorNode] 도구 실행 결과: {tool_result}")
                                 logger.info(f"[SupervisorNode] 채용정보 수: {len(state.jobPostings)}")
+                                logger.info(f"[SupervisorNode] 훈련정보 수: {len(state.trainingCourses)}")
+                                logger.info(f"[SupervisorNode] 정책정보 수: {len(state.policyPostings)}")
                                 return state  # 도구 실행 결과가 있으면 바로 반환
                         except json.JSONDecodeError:
                             # 문자열 응답인 경우
@@ -57,12 +62,10 @@ async def supervisor_node(state: FlowState):
                             
                 # 최종 출력이 있는 경우 (도구 실행 결과가 없을 때만)
                 if "output" in result and not state.final_response:
-                    output = result["output"]
-                    if isinstance(output, str):
-                        state.final_response = {
-                            "message": output,
-                            "type": "chat"
-                        }
+                    state.final_response = {
+                        "message": result["output"],
+                        "type": "chat"
+                    }
                 
             logger.info(f"[SupervisorNode] 최종 응답: {state.final_response}")
             
@@ -81,4 +84,4 @@ async def supervisor_node(state: FlowState):
             "message": f"처리 중 오류 발생: {str(e)}",
             "type": "error"
         }
-    return state 
+        return state 

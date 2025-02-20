@@ -10,7 +10,7 @@ from app.agents.chat_agent import ChatAgent
 from app.agents.flow_graph import build_flow_graph
 from app.models.flow_state import FlowState
 from app.agents.ner_extractor import extract_ner
-
+from db.routes_auth import get_user_info_by_cookie
 import os
 import json
 import time
@@ -37,6 +37,7 @@ def get_chat_agent(request: Request, llm=Depends(get_llm)):
 
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
+    """채팅 API"""
     try:
         # 요청 시작 로깅
         logger.info("="*50)
@@ -44,40 +45,22 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         logger.info(f"[ChatRouter] 요청 메시지: {chat_request.user_message}")
         logger.info(f"[ChatRouter] 사용자 프로필: {chat_request.user_profile}")    
         
-        
         # DB 체크
         if db is None:
             logger.error("[ChatRouter] DB 연결 없음")
             raise Exception("DB connection is None")
 
-        # 쿠키 체크
-        _id = request.cookies.get("sjgid")
-        logger.info(f"[ChatRouter] 쿠키 ID: {_id}")
-        
-        # 쿠키가 없는 경우에도 기본 응답을 반환
-        if not _id:
-            logger.warning("[ChatRouter] 쿠키에 사용자 ID 없음 - 기본 응답 반환")
+        # 쿠키에서 사용자 정보 조회
+        user = None
+        try:
+            user = await get_user_info_by_cookie(request)
+        except:
+            logger.error(f"[ChatRouter] 쿠키에서 사용자 정보 조회 중 오류 발생 - 기본 응답 반환")
             return ChatResponse(
                 message=chat_request.user_message,
-                jobPostings=[],
-                trainingCourses=[],
-                type="info",
-                user_profile=chat_request.user_profile or {}
+                type="error",
+                error_message="사용자 정보를 찾을 수 없습니다."
             )
-
-        # 사용자 조회
-        user = await db.users.find_one({"_id": ObjectId(_id)})
-        if not user:
-            logger.warning(f"[ChatRouter] 사용자를 찾을 수 없음. ID: {_id} - 기본 응답 반환")
-        
-        # configurable 설정
-        config = {
-            "configurable": {
-                "thread_id": str(_id),  # 사용자 ID 또는 기본값
-                "checkpoint_ns": "chat",  # 네임스페이스
-                "checkpoint_id": f"chat_{int(time.time())}"  # 타임스탬프 기반 ID
-            }
-        }
 
         # NER 추출
         extracted_ner = await extract_ner(
@@ -86,10 +69,14 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             user_profile=chat_request.user_profile
         )
 
-        # 초기 상태 설정
+        # chat_history를 문자열로 변환
+        chat_history = json.dumps(user.get("messages", []), ensure_ascii=False) if user else ""
+
+        # 워크플로우 초기 상태 설정
         initial_state = FlowState(
             query=chat_request.user_message,
-            chat_history=request.cookies.get("chat_history", ""),
+            # chat_history=chat_history,  # 문자열로 변환된 chat_history 사용
+            chat_history="",  # test
             user_profile=chat_request.user_profile or {},
             agent_type="",
             agent_reason="",
@@ -109,32 +96,44 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         # 워크플로우 실행
         final_state = await workflow.ainvoke(
             initial_state,
-            {"configurable": {"thread_id": str(_id)}}
+            {"configurable": {"thread_id": str(user["_id"])}}
         )
         
         logger.info(f"[ChatRouter] 워크플로우 결과 - State: {final_state}")
         
-        # AddableValuesDict -> dict 변환
-        if hasattr(final_state, "value"):
-            final_state = final_state.value
-            
         # 최종 응답 변환
         try:
+            # AddableValuesDict -> dict 변환
+            if hasattr(final_state, "value"):
+                final_state_dict = final_state.value
+            else:
+                final_state_dict = final_state
+
             response = ChatResponse(
-                message=final_state.get("final_response", {}).get("message", ""),
-                type=final_state.get("final_response", {}).get("type", "chat"),
-                jobPostings=final_state.get("jobPostings", []),
-                trainingCourses=final_state.get("trainingCourses", []),
+                message=final_state_dict.get("final_response", {}).get("message", ""),
+                type=final_state_dict.get("final_response", {}).get("type", "chat"),
+                jobPostings=final_state_dict.get("jobPostings", []),
+                trainingCourses=final_state_dict.get("trainingCourses", []),
+                policyPostings=final_state_dict.get("policyPostings", []),
                 user_profile=chat_request.user_profile or {}
             )
+            
+            logger.info(f"[ChatRouter] 최종 응답: {response}")
+            return response
+
         except Exception as parse_error:
             logger.error(f"[ChatRouter] 응답 변환 중 오류: {str(parse_error)}")
             logger.error(f"[ChatRouter] final_state 타입: {type(final_state)}")
             logger.error(f"[ChatRouter] final_state 내용: {final_state}")
-            raise
             
-        logger.info(f"[ChatRouter] 최종 응답: {response}")
-        return response
+            return ChatResponse(
+                message="죄송합니다. 응답 처리 중 문제가 발생했습니다.",
+                type="error",
+                jobPostings=[],
+                trainingCourses=[],
+                policyPostings=[],
+                user_profile=chat_request.user_profile or {}
+            )
         
     except Exception as e:
         logger.error(f"[ChatRouter] 처리 중 오류: {str(e)}", exc_info=True)
@@ -143,6 +142,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             type="error",
             jobPostings=[],
             trainingCourses=[],
+            policyPostings=[],
             user_profile=chat_request.user_profile or {}
         )
 

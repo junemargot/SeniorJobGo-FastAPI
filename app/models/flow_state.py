@@ -32,6 +32,7 @@ class FlowState(BaseModel):
     # 검색 결과
     jobPostings: List[Dict[str, Any]] = Field(default_factory=list)
     trainingCourses: List[Dict[str, Any]] = Field(default_factory=list)
+    policyPostings: List[Dict[str, Any]] = Field(default_factory=list)
 
     # LangChain 메시지
     messages: List[BaseMessage] = Field(default_factory=list)
