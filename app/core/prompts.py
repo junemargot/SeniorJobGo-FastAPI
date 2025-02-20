@@ -1,13 +1,15 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 
-from app.utils.constants import DICTIONARY  
+from app.utils.constants import DICTIONARY
 import re
+
 
 # 사전 변환 규칙을 적용하는 함수 (DICTIONARY 직접 사용)
 def apply_dictionary_rules(query: str) -> str:
     """사용자의 질문을 사전(DICTIONARY)에 따라 변환하는 함수"""
     pattern = re.compile("|".join(map(re.escape, DICTIONARY.keys())))
     return pattern.sub(lambda match: DICTIONARY[match.group(0)], query)
+
 
 # 문서 검증 프롬프트
 # verify_prompt = PromptTemplate.from_template("""
@@ -24,7 +26,8 @@ def apply_dictionary_rules(query: str) -> str:
 
 # 답변:
 # """)
-verify_prompt = PromptTemplate.from_template("""
+verify_prompt = PromptTemplate.from_template(
+    """
 Please determine whether the following documents contain enough information to answer the user's question.
 
 Question: {query}
@@ -37,7 +40,8 @@ Answer format:
 - If the documents do not contain sufficient information, reply "NO"
 
 Answer:
-""")
+"""
+)
 
 # 질문 변환 프롬프트 (DICTIONARY 적용됨)
 # rewrite_prompt = PromptTemplate.from_template("""
@@ -48,17 +52,20 @@ Answer:
 
 # 변경된 질문: {transformed_query}
 # """)
-rewrite_prompt = PromptTemplate.from_template("""
+rewrite_prompt = PromptTemplate.from_template(
+    """
 Look at the user's question and refer to our dictionary to modify the user's question.
 Make sure to strictly apply the rules in the dictionary.
 
 Original question: {original_query}
 
-Modified question: {transformed_query}""")
+Modified question: {transformed_query}"""
+)
 
 
 # 채용 공고 추천 프롬프트
-generate_prompt = PromptTemplate.from_template("""
+generate_prompt = PromptTemplate.from_template(
+    """
 Based on the following information, please compose a helpful response for the job seeker.
 Pay special attention to whether each job posting's region matches the region the user is looking for.
 
@@ -81,7 +88,8 @@ Display the discovered job postings in the following card format:
 [Separator]
 
 Show each posting in the above format. Make sure the response is clear and detailed so the job seeker can easily understand it.
-""")
+"""
+)
 
 # 챗봇 페르소나 설정
 chat_persona_prompt = """You are an AI job counselor specializing in assisting senior job seekers.
@@ -100,13 +108,16 @@ Conversation principles:
 """
 
 # 기본 대화 프롬프트
-chat_prompt = ChatPromptTemplate.from_messages([
-    ("system", chat_persona_prompt),
-    ("human", "{query}")  # input -> query로 변경하여 일관성 유지
-])
+chat_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", chat_persona_prompt),
+        ("human", "{query}"),  # input -> query로 변경하여 일관성 유지
+    ]
+)
 
 # 정보 추출 프롬프트
-EXTRACT_INFO_PROMPT = PromptTemplate.from_template("""
+EXTRACT_INFO_PROMPT = PromptTemplate.from_template(
+    """
 You are an expert at extracting job-related information from natural conversations.
 
 Previous conversation context:
@@ -150,10 +161,12 @@ Examples:
 2. "우리 동네 근처에서 할만한 일자리 있나요?" -> {{"직무": "", "지역": "", "연령대": ""}}
 3. "강남구에서 요양보호사 자리 있을까요?" -> {{"직무": "요양보호사", "지역": "강남구", "연령대": ""}}
 4. "여기 근처 식당 일자리 있나요?" -> {{"직무": "식당", "지역": "", "연령대": ""}}
-""")
+"""
+)
 
 # 의도 분류 프롬프트 수정
-CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template("""
+CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template(
+    """
 You are an expert career counselor specializing in senior job seekers. Your task is to accurately identify the user's intent, particularly focusing on job search or vocational training intentions.
 
 Previous conversation:
@@ -199,10 +212,12 @@ Examples:
 3. "안녕하세요" -> {{"intent": "general", "confidence": 0.9, "explanation": "Simple greeting"}}
 4. "자격증 따고 싶어요" -> {{"intent": "training", "confidence": 0.9, "explanation": "Certificate acquisition inquiry"}}
 5. "지역 근처에 뭐 있나요?" -> {{"intent": "job", "confidence": 0.7, "explanation": "Implicit job search with location"}}
-""")
+"""
+)
 
 # 재랭킹 프롬프트 추가
-rerank_prompt = PromptTemplate.from_template("""
+rerank_prompt = PromptTemplate.from_template(
+    """
 Please compare the user's search criteria to each job posting and rate how well each posting matches.
 
 User's criteria:
@@ -221,10 +236,12 @@ Evaluation criteria:
 - Nearby region: +1 point
 - Similar job: +1 point
 
-""")
+"""
+)
 
 # 훈련정보 관련 프롬프트 추가
-TRAINING_PROMPT = PromptTemplate.from_template("""
+TRAINING_PROMPT = PromptTemplate.from_template(
+    """
 You are a vocational training counselor for senior job seekers.
 From the following user request, extract the information necessary to search for training programs.
 
@@ -243,9 +260,11 @@ Special rules:
 2. If the training program name is not specified, leave it as an empty string.
 3. The duration and cost are optional.
 
-""")
+"""
+)
 
-TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template("""
+TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template(
+    """
 Extract training/education-related information from the user's message.
 
 Training Classification Reference:
@@ -308,10 +327,12 @@ Important Notes:
 2. Match training types and methods exactly as specified in the reference
 3. For locations, maintain the exact district names (e.g., "강남구" not just "강남")
 4. Keep field values empty ("") if not explicitly mentioned in the user message
-""")
+"""
+)
 
 # 이력서 작성 가이드 프롬프트 추가
-RESUME_GUIDE_PROMPT = PromptTemplate.from_template("""
+RESUME_GUIDE_PROMPT = PromptTemplate.from_template(
+    """
 You are a professional career counselor specializing in helping senior job seekers write effective resumes.
 
 User Query: {query}
@@ -373,10 +394,12 @@ Response should be structured as:
 2. Relevant examples or templates
 3. Additional tips specific to senior job seekers
 4. Next steps or follow-up suggestions
-""")
+"""
+)
 
 # 이력서 피드백 프롬프트 추가
-RESUME_FEEDBACK_PROMPT = PromptTemplate.from_template("""
+RESUME_FEEDBACK_PROMPT = PromptTemplate.from_template(
+    """
 You are a professional resume reviewer specializing in senior job seeker resumes.
 
 Resume Content: {resume_content}
@@ -419,4 +442,28 @@ Remember:
 - Focus on actionable improvements
 - Consider industry-specific needs
 - Address age-related concerns tactfully
-""")
+"""
+)
+
+application_prompt = PromptTemplate(
+    template="""당신은 어르신들의 이력서와 이메일을 작성하는 전문가입니다.
+친절하고 공손한 태도로 어르신들의 경력과 경험을 잘 살려 문서를 작성해주세요.
+
+작성 시 고려사항:
+- 어르신의 풍부한 인생 경험과 노하우를 강조
+- 성실함과 책임감을 부각
+- 신체 건강함과 적극적인 태도를 표현
+- 배우려는 자세와 열정을 강조
+- 공손하고 예의 바른 어투 사용
+
+주어진 정보:
+{user_info}
+{job_info}
+
+요청사항:
+{input}
+
+위 내용을 바탕으로 어르신에게 적합한 문서를 작성해주세요.
+""",
+    input_variables=["user_info", "job_info", "input"],
+)

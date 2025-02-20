@@ -266,19 +266,20 @@ class ResumeAdvisorAgent:
 
     {"<div class='button-container' style='display:flex;flex-direction:column;gap:5px'>" if edit_mode else ""}
     {"<button type='button' onclick='downloadResume()' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%'>이력서 다운로드</button>" if edit_mode else ""}
-    {"<button type='button' onclick='window.close()' style='padding:8px;background:#f8f9fa;color:#212529;border:none;border-radius:4px;cursor:pointer;width:100%'>취소</button>" if edit_mode else ""}
+    {"<button type='button' onclick='sendResumeEmail()' style='padding:8px;background:#ffbc2c;color:white;border:none;border-radius:4px;cursor:pointer;width:100%;margin-top:5px'>이메일로 보내기</button>" if edit_mode else ""}
+    {"<button type='button' onclick='window.close()' style='padding:8px;background:#f8f9fa;color:#212529;border:none;border-radius:4px;cursor:pointer;width:100%;margin-top:5px'>취소</button>" if edit_mode else ""}
     {"</div>" if edit_mode else ""}
 
     <script>
     {'''
+    function getValue(selector) {
+        const element = document.querySelector(selector);
+        return element ? element.value : '';
+    }
+
     function downloadResume() {
         const API_BASE_URL = 'http://localhost:8000/api/v1';
         
-        const getValue = (selector, defaultValue = '') => {
-            const element = document.querySelector(selector);
-            return element ? element.value : defaultValue;
-        };
-
         const formData = {
             name: getValue('input[placeholder="이름을 입력하세요"]'),
             email: getValue('input[placeholder="이메일을 입력하세요"]'),
@@ -301,9 +302,7 @@ class ResumeAdvisorAgent:
             body: JSON.stringify(formData)
         })
         .then(response => {
-            if (!response.ok) {
-                throw new Error('PDF 생성 실패');
-            }
+            if (!response.ok) throw new Error('PDF 생성 실패');
             return response.blob();
         })
         .then(blob => {
@@ -319,6 +318,50 @@ class ResumeAdvisorAgent:
         .catch(error => {
             console.error('다운로드 오류:', error);
             alert('이력서 다운로드 중 오류가 발생했습니다.');
+        });
+    }
+
+    function sendResumeEmail() {
+        const API_BASE_URL = 'http://localhost:8000/api/v1';
+        const email = prompt('이메일 주소를 입력하세요:');
+        if (!email) return;
+
+        const formData = {
+            name: getValue('input[placeholder="이름을 입력하세요"]'),
+            email: getValue('input[placeholder="이메일을 입력하세요"]'),
+            phone: getValue('input[placeholder="연락처를 입력하세요"]'),
+            education: [{
+                school: getValue('input[placeholder="학교/전공/학위/졸업연도를 입력하세요"]'),
+                major: "",
+                degree: "",
+                year: 0
+            }],
+            experience: [{
+                company: getValue('input[placeholder="회사명/직위/기간을 입력하세요"]'),
+                position: "",
+                period: "",
+                description: getValue('textarea[placeholder="업무 내용을 입력하세요"]')
+            }],
+            desired_job: getValue('input[placeholder="희망하는 직무를 입력하세요"]'),
+            skills: getValue('input[placeholder="보유한 기술이나 자격증을 입력하세요"]'),
+            additional_info: getValue('textarea[placeholder="자기소개서를 입력하세요"]'),
+            receiver_email: email
+        };
+
+        fetch(`${API_BASE_URL}/resume/send-email`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('이메일 전송 실패');
+            alert('이력서가 이메일로 전송되었습니다.');
+        })
+        .catch(error => {
+            console.error('이메일 전송 오류:', error);
+            alert('이메일 전송 중 오류가 발생했습니다.');
         });
     }
     '''}

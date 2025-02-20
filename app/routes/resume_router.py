@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, FileResponse, Response
 from app.agents.resume_advisor import ResumeAdvisorAgent, ResumeResponse
 from app.database.mongodb import get_database
 from pydantic import BaseModel
+from app.agents.send_mail_agent import SendMailAgent
 
 from app.models.schemas import ResumeRequest, ResumeData, Education, Experience
 import logging
@@ -367,4 +368,37 @@ async def edit_resume(
         }
     except Exception as e:
         logger.error(f"이력서 수정 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resume/send-email")
+async def send_resume_email(
+    resume_data: dict,
+    resume_advisor: ResumeAdvisorAgent = Depends(get_resume_advisor_agent),
+):
+    try:
+        # HTML 이력서 생성
+        resume_html = await resume_advisor.create_resume_template(
+            ResumeData(**resume_data), edit_mode=False
+        )
+
+        # 이메일 에이전트 초기화
+        email_agent = SendMailAgent()
+
+        # 이메일 전송
+        subject = "이력서 첨부"
+        receiver_email = resume_data.get("receiver_email")
+
+        # process_email 메서드 사용
+        result = await email_agent.process_email(
+            subject=subject, body=resume_html, receiver_email=receiver_email
+        )
+
+        if "성공" in result:
+            return {"message": "이메일 전송 성공"}
+        else:
+            raise HTTPException(status_code=500, detail=result)
+
+    except Exception as e:
+        logger.error(f"이메일 전송 중 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
