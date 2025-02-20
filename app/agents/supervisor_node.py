@@ -35,17 +35,19 @@ async def supervisor_node(state: FlowState):
                     if isinstance(step[0], AgentAction):
                         try:
                             tool_result = json.loads(step[1])
-                            if tool_result.get("type") in ["job", "training", "policy", "chat", "error"]:
+                            if tool_result.get("type") in ["job", "training", "policy", "meal", "chat", "error"]:
                                 # 직접 값을 할당
                                 state.jobPostings = tool_result.get("jobPostings", [])
                                 state.trainingCourses = tool_result.get("trainingCourses", [])
                                 state.policyPostings = tool_result.get("policyPostings", [])
+                                state.mealPostings = tool_result.get("mealPostings", [])
                                 state.final_response = {
                                     "message": tool_result.get("final_answer", ""),
                                     "type": tool_result.get("type", "chat"),
                                     "jobPostings": state.jobPostings,  # 저장된 값 사용
                                     "trainingCourses": state.trainingCourses,  # 저장된 값 사용
-                                    "policyPostings": state.policyPostings  # 저장된 값 사용
+                                    "policyPostings": state.policyPostings,  # 저장된 값 사용
+                                    "mealPostings": state.mealPostings  # 추가
                                 }
                                 logger.info(f"[SupervisorNode] 도구 실행 결과: {tool_result}")
                                 logger.info(f"[SupervisorNode] 채용정보 수: {len(state.jobPostings)}")

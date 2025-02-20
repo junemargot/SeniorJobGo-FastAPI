@@ -71,6 +71,9 @@ async def lifespan(app: FastAPI):
         app.include_router(chat_router.router, prefix="/api/v1")
         logger.info("데이터베이스 초기화 및 라우터 등록 완료")
 
+        # data_client 초기화 및 등록
+        app.state.data_client = PublicDataClient()
+
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)
         raise

@@ -396,17 +396,19 @@ async def meal_agent_tool_func(input_str: str) -> str:
             
         try:
             data = json.loads(input_str)
+            query = data.get("query", input_str)
+            user_profile = data.get("user_profile", {})
+            user_ner = data.get("user_ner", {})
         except json.JSONDecodeError:
-            data = {"query": input_str, "user_profile": {}}
+            query = input_str
+            user_ner = {}
         
         logger.info(f"[meal_agent_tool] input_str: {input_str}")
 
-        user_ner = data.get("user_ner", {})
         region = user_ner.get("지역", "")
         
-        # data_client 호출
-        from app.main import app
-        data_client = app.state.data_client
+        # data_client 인스턴스 생성
+        data_client = PublicDataClient()
         
         # 전체 데이터 가져오기
         all_services = data_client.fetch_meal_services()
@@ -417,17 +419,45 @@ async def meal_agent_tool_func(input_str: str) -> str:
         else:
             filtered_services = all_services[:5]  # 지역이 없으면 상위 5개만
             
-        response = {
-            "message": f"{region or '전국'}의 무료급식소 정보입니다.",
+        # 결과 포맷팅
+        meal_services = []
+        for service in filtered_services[:5]:  # 상위 5개만
+            meal_services.append({
+                "name": service.get("name", ""),
+                "address": service.get("address", ""),
+                "phone": service.get("phone", ""),
+                "operatingHours": service.get("operatingHours", ""),
+                "targetGroup": service.get("targetGroup", ""),
+                "description": service.get("description", "")
+            })
+
+        # 사용자 친화적인 메시지 생성
+        if meal_services:
+            message = f"{region or '전국'}의 무료급식소 {len(meal_services)}곳을 찾았습니다.\n\n"
+            # for i, service in enumerate(meal_services, 1):
+            #     message += f"{i}. {service['name']}\n"
+            #     message += f"- 주소: {service['address']}\n"
+            #     message += f"- 전화: {service['phone']}\n"
+            #     message += f"- 운영시간: {service['operatingHours']}\n"
+            #     message += f"- 대상: {service['targetGroup']}\n"
+            #     if service['description']:
+            #         message += f"- 설명: {service['description']}\n"
+            #     message += "\n"
+        else:
+            message = f"{region or '전국'}에서 이용 가능한 무료급식소를 찾지 못했습니다."
+            
+        return json.dumps({
+            "message": message,
             "type": "meal",
-            "meal_services": filtered_services[:5]
-        }
-        
-        return json.dumps(response, ensure_ascii=False)
+            "mealPostings": filtered_services[:5],
+            "final_answer": message
+        }, ensure_ascii=False)
         
     except Exception as e:
         logger.error(f"[meal_agent_tool] 오류: {str(e)}", exc_info=True)
         return json.dumps({
             "message": f"무료급식소 검색 중 오류 발생: {str(e)}",
-            "type": "error"
+            "type": "error",
+            "mealPostings": [],
+            "final_answer": "무료급식소 정보 검색 중 오류가 발생했습니다."
         }, ensure_ascii=False)
