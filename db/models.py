@@ -9,7 +9,7 @@ from datetime import datetime
 class ChatModel(BaseModel):
     index: int = Field(..., ge=0)  # 대화 인덱스. 0 이상
     content: str = Field(..., min_length=1)  # 대화 내용. 최소 1자
-    role: str = Field(..., pattern="^(user|assistant)$")  # 'user' 또는 'assistant'로 통일
+    role: str = Field(..., pattern="^(user|bot)$")  # 'user' 또는 'bot'로 통일
     timestamp: datetime = Field(default_factory=datetime.now)
     type: str = Field(default="chat")  # chat, job, training, policy, meal 등
     metadata: Dict[str, Any] = Field(default_factory=dict)  # 추가 데이터 저장용

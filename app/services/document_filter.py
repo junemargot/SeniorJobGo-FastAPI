@@ -163,7 +163,7 @@ class DocumentFilter:
                         try:
                             if isinstance(msg, dict):
                                 role = msg.get("role", "")
-                                if role == "assistant":
+                                if role == "bot":
                                     content = msg.get("content", "")
                                     if isinstance(content, dict):
                                         last_bot_message = content.get("message", "")

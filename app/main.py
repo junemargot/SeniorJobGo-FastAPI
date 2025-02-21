@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
         logger.info("LLM과 에이전트를 초기화합니다.")
         llm = ChatOpenAI(
             model_name="gpt-4o-mini",
-            temperature=0.7,
+            temperature=0.5,
             request_timeout=30
         )
         app.state.llm = llm  # 앱 상태에 저장

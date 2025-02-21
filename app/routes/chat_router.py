@@ -44,9 +44,9 @@ async def format_chat_history(messages: List[Dict]) -> str:
         role = msg.get("role", "")
         content = msg.get("content", "")
         if role == "user":
-            history.append(f"User: {content}")
-        elif role == "assistant":
-            history.append(f"Assistant: {content}")
+            history.append(f"user: {content}")
+        elif role == "bot":
+            history.append(f"bot: {content}")
     return "\n".join(history[-5:])  # 최근 5개 메시지만 사용
 
 async def save_chat_message(user_id: str, message: Dict) -> bool:
@@ -159,8 +159,8 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
             await save_chat_message(user["_id"], user_message)
             
             # 응답 생성 후
-            assistant_message = {
-                "role": "assistant",
+            bot_message = {
+                "role": "bot",
                 "content": response.message,
                 "timestamp": datetime.now(),
                 "type": response.type,
@@ -171,7 +171,7 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                     "mealPostings": len(response.mealPostings)
                 }
             }
-            await save_chat_message(user["_id"], assistant_message)
+            await save_chat_message(user["_id"], bot_message)
             
             return response
 
@@ -352,3 +352,20 @@ async def search_training(
         logger.error(f"Training search error: {str(e)}")
         logger.error("상세 에러:", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 
+    
+
+# policy
+@router.post("/policy/search")
+async def search_policies(request: Request):
+    try:
+        from app.agents.policy_agent import query_policy_agent
+        logger.info(f"[PolicySearch] 정책 검색 요청: {request.user_message}")
+        result = query_policy_agent(request.user_message)
+        logger.info(f"[PolicySearch] 검색 결과: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"[PolicySearch] 오류 발생: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="정책 검색 중 오류가 발생했습니다."
+        )

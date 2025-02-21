@@ -337,39 +337,38 @@ async def policy_advisor_tool_func(input_str: str) -> str:
             query = input_str
             
         # policy_agent 호출
-        response = query_policy_agent(query)
+        response = await query_policy_agent(query)
         
         # 응답이 이미 dict인 경우 JSON으로 변환
         if isinstance(response, dict):
-            # 정책 정보를 사용자 친화적인 메시지로 변환
-            policies = response.get("policyPostings", {})
+            policies = response.get("policyPostings", [])
+            
             if policies:
-                message = f"총 {len(policies)}건의 정책 정보를 찾았습니다.\n\n"
-                
-                for i, policy in enumerate(policies, 1):
-                    message += f"{i}. {policy['title']}\n"
-                    message += f"- 출처: {policy['source']}\n"
-                    message += f"- 대상: {policy['target']}\n"
-                    message += f"- 내용: {policy['content']}\n"
-                    if policy['applyMethod'] != "정보 없음":
-                        message += f"- 신청방법: {policy['applyMethod']}\n"
-                    if policy['contact'] != "정보 없음":
-                        message += f"- 문의: {policy['contact']}\n"
-                    message += f"- 자세히 보기: {policy['url']}\n\n"
+                message = f"총 {len(policies)}건의 정책 정보를 찾았습니다"
+                # for i, policy in enumerate(policies, 1):
+                #     message += f"{i}. {policy['title']}\n"
+                #     message += f"- 출처: {policy['source']}\n"
+                #     message += f"- 대상: {policy['target']}\n"
+                #     message += f"- 내용: {policy['content']}\n"
+                #     if policy['applyMethod'] != "정보 없음":
+                #         message += f"- 신청방법: {policy['applyMethod']}\n"
+                #     if policy['contact'] != "정보 없음":
+                #         message += f"- 문의: {policy['contact']}\n"
+                #     message += f"- 자세히 보기: {policy['url']}\n\n"
             else:
-                message = "죄송합니다. 현재 조건에 맞는 정책 정보를 찾지 못했습니다."
+                message = "죄송합니다. 현재 조건에 맞는 정책 정보를 찾지 못했습니다"
 
             return json.dumps({
-                "message": message,
+                "message": message,  # 직접 생성한 메시지 사용
                 "type": "policy",
-                "policyPostings": policies,  # search_result 대신 policyPostings 사용
-                "final_answer": str(response)
+                "policyPostings": policies,
+                "final_answer": message  # message와 동일한 값 사용
             }, ensure_ascii=False)
             
         # 문자열 응답인 경우 기본 형식으로 변환
         return json.dumps({
             "message": str(response),
-            "type": "policy",
+            "type": "policy", 
             "policyPostings": [],
             "final_answer": str(response)
         }, ensure_ascii=False)
@@ -380,7 +379,7 @@ async def policy_advisor_tool_func(input_str: str) -> str:
             "message": f"정책 정보 검색 중 오류: {str(e)}",
             "type": "error",
             "policyPostings": [],
-            "final_answer": f"정책 정보 검색 중 오류가 발생했습니다."
+            "final_answer": "정책 정보 검색 중 오류가 발생했습니다."
         }, ensure_ascii=False)
 
 async def meal_agent_tool_func(input_str: str) -> str:

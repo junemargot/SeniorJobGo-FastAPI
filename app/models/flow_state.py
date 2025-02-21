@@ -79,7 +79,7 @@ class FlowState(BaseModel):
         history = []
         for msg in self.messages:
             if isinstance(msg, HumanMessage):
-                history.append(f"User: {msg.content}")
+                history.append(f"user: {msg.content}")
             elif isinstance(msg, AIMessage):
-                history.append(f"Assistant: {msg.content}")
+                history.append(f"bot: {msg.content}")
         return "\n".join(history)

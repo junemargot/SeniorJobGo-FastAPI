@@ -225,7 +225,7 @@ def extract_policy_info(content: str) -> Dict:
         logger.error(f"정책 정보 추출 중 오류: {str(e)}")
         return None
 
-def query_policy_agent(query: str) -> Dict:
+async def query_policy_agent(query: str) -> Dict:
     """정책 검색 함수 - 최적화 버전"""
     try:
         logger.info(f"[PolicyAgent] 정책 검색 시작: {query}")
@@ -236,7 +236,8 @@ def query_policy_agent(query: str) -> Dict:
         policies = []
 
         try:
-            web_results = search.run(enhanced_query)
+            # Tavily 검색을 비동기로 변경
+            web_results = await search.arun(enhanced_query)  # .run() -> .arun()
             logger.info(f"[PolicyAgent] Tavily 검색 결과: {len(web_results)}건")
             
             if not web_results:
