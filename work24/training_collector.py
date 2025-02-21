@@ -122,19 +122,23 @@ class TrainingCollector:
                 default_params["srchNcs2"] = params["srchNcs2"]
             if "srchNcs3" in params and params["srchNcs3"]:
                 default_params["srchNcs3"] = params["srchNcs3"]
-                
+            
             # 지역 처리
             if "srchTraArea1" in params and params["srchTraArea1"]:
                 default_params["srchTraArea1"] = params["srchTraArea1"]
             if "srchTraArea2" in params and params["srchTraArea2"]:
                 default_params["srchTraArea2"] = params["srchTraArea2"]
-                
+            
             # 날짜 처리
             if "srchTraStDt" in params:
                 default_params["srchTraStDt"] = params["srchTraStDt"]
             if "srchTraEndDt" in params:
                 default_params["srchTraEndDt"] = params["srchTraEndDt"]
-                
+            
+            # 검색어 처리
+            if "srchTraProcessNm" in params and params["srchTraProcessNm"]:
+                default_params["srchTraProcessNm"] = params["srchTraProcessNm"]
+            
             # 기타 파라미터 업데이트
             for key in ["pageSize", "outType", "sort", "sortCol"]:
                 if key in params:
@@ -142,6 +146,7 @@ class TrainingCollector:
         
         # API 요청 전 캐시 무효화를 위한 타임스탬프 추가
         default_params["timestamp"] = str(int(time.time()))
+        print(f"최종 요청 파라미터: {default_params}")  # 디버깅용
         
         response = self._make_api_request(url, default_params)
         print(f"API 응답: {json.dumps(response, ensure_ascii=False, indent=2)}")  # 디버깅용
