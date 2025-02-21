@@ -355,17 +355,36 @@ async def search_training(
     
 
 # policy
-@router.post("/policy/search")
-async def search_policies(request: Request):
+@router.post("/policy/search", response_model=ChatResponse)
+async def search_policies(request: ChatRequest):
     try:
         from app.agents.policy_agent import query_policy_agent
         logger.info(f"[PolicySearch] 정책 검색 요청: {request.user_message}")
-        result = query_policy_agent(request.user_message)
+        
+        result = await query_policy_agent(request.user_message)
         logger.info(f"[PolicySearch] 검색 결과: {result}")
-        return result
+        
+        # ChatResponse 형식으로 변환
+        response = ChatResponse(
+            message=result.get("message", ""),
+            type="policy",
+            jobPostings=[],
+            trainingCourses=[],
+            policyPostings=result.get("policyPostings", []),
+            mealPostings=[],
+            user_profile=request.user_profile or {}
+        )
+        
+        return response
+        
     except Exception as e:
         logger.error(f"[PolicySearch] 오류 발생: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="정책 검색 중 오류가 발생했습니다."
+        return ChatResponse(
+            message="정책 검색 중 오류가 발생했습니다.",
+            type="error",
+            jobPostings=[],
+            trainingCourses=[],
+            policyPostings=[],
+            mealPostings=[],
+            user_profile=request.user_profile or {}
         )
