@@ -18,7 +18,6 @@ from app.routes import userInform_router
 from app.routes import training_router
 from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.chat_agent import ChatAgent
-from app.agents.meal_agent import MealAgent 
 from app.services.data_client import PublicDataClient
 
 # 로깅 설정을 더 자세하게
@@ -60,7 +59,6 @@ async def lifespan(app: FastAPI):
         app.state.job_advisor = JobAdvisorAgent(llm, vector_search)
         app.state.training_advisor = TrainingAdvisorAgent(llm)
         app.state.chat_agent = ChatAgent(llm)  # ChatAgent 추가
-        app.state.meal_agent = MealAgent(llm, PublicDataClient())  # MealAgent 추가
 
         logger.info("LLM과 에이전트 초기화 완료")
 

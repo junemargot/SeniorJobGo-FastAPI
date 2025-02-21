@@ -345,16 +345,6 @@ async def policy_advisor_tool_func(input_str: str) -> str:
             
             if policies:
                 message = f"총 {len(policies)}건의 정책 정보를 찾았습니다"
-                # for i, policy in enumerate(policies, 1):
-                #     message += f"{i}. {policy['title']}\n"
-                #     message += f"- 출처: {policy['source']}\n"
-                #     message += f"- 대상: {policy['target']}\n"
-                #     message += f"- 내용: {policy['content']}\n"
-                #     if policy['applyMethod'] != "정보 없음":
-                #         message += f"- 신청방법: {policy['applyMethod']}\n"
-                #     if policy['contact'] != "정보 없음":
-                #         message += f"- 문의: {policy['contact']}\n"
-                #     message += f"- 자세히 보기: {policy['url']}\n\n"
             else:
                 message = "죄송합니다. 현재 조건에 맞는 정책 정보를 찾지 못했습니다"
 
@@ -422,33 +412,22 @@ async def meal_agent_tool_func(input_str: str) -> str:
         meal_services = []
         for service in filtered_services[:5]:  # 상위 5개만
             meal_services.append({
-                "name": service.get("name", ""),
-                "address": service.get("address", ""),
-                "phone": service.get("phone", ""),
-                "operatingHours": service.get("operatingHours", ""),
-                "targetGroup": service.get("targetGroup", ""),
-                "description": service.get("description", "")
+                "name": service.get("fcltyNm", ""),  # API 필드명에 맞게 수정
+                "address": service.get("rdnmadr", ""),
+                "phone": service.get("phoneNumber", ""),
+                "operatingHours": service.get("mlsvTime", ""),
+                "targetGroup": service.get("mlsvTrget", ""),
+                "description": service.get("mlsvDate", "")
             })
 
         # 사용자 친화적인 메시지 생성
         if meal_services:
-            message = f"{region or '전국'}의 무료급식소 {len(meal_services)}곳을 찾았습니다.\n\n"
-            # for i, service in enumerate(meal_services, 1):
-            #     message += f"{i}. {service['name']}\n"
-            #     message += f"- 주소: {service['address']}\n"
-            #     message += f"- 전화: {service['phone']}\n"
-            #     message += f"- 운영시간: {service['operatingHours']}\n"
-            #     message += f"- 대상: {service['targetGroup']}\n"
-            #     if service['description']:
-            #         message += f"- 설명: {service['description']}\n"
-            #     message += "\n"
-        else:
-            message = f"{region or '전국'}에서 이용 가능한 무료급식소를 찾지 못했습니다."
+            message = f"{region or '전국'}의 무료급식소 {len(meal_services)}곳을 찾았습니다"
             
         return json.dumps({
             "message": message,
             "type": "meal",
-            "mealPostings": filtered_services[:5],
+            "mealPostings": meal_services[:5],  # 변환된 데이터 사용
             "final_answer": message
         }, ensure_ascii=False)
         
