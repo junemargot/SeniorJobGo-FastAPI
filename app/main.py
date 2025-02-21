@@ -18,7 +18,7 @@ from app.routes import userInform_router
 from app.routes import training_router
 from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.chat_agent import ChatAgent
-from app.services.data_client import PublicDataClient
+from app.services.meal_data_client import PublicDataClient
 
 # 로깅 설정을 더 자세하게
 logging.basicConfig(

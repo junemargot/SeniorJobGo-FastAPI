@@ -9,7 +9,7 @@ import logging
 from app.models.flow_state import FlowState
 import json
 from app.agents.policy_agent import query_policy_agent
-from app.services.data_client import PublicDataClient
+from app.services.meal_data_client import PublicDataClient
 
 logger = logging.getLogger(__name__)
 
