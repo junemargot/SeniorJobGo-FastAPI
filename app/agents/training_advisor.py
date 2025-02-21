@@ -135,7 +135,7 @@ class TrainingAdvisorAgent:
             
             # 오늘부터 2개월 내 시작하는 과정 검색
             today = datetime.now()
-            two_months_later = today + timedelta(days=60)
+            # two_months_later = today + timedelta(days=60)
             
             # Work24 API 필수 파라미터
             params = {
@@ -143,8 +143,8 @@ class TrainingAdvisorAgent:
                 "outType": "1",                        # 필수: 출력형태 (1:리스트)
                 "pageNum": "1",                        # 필수: 시작페이지
                 "pageSize": "50",                      # 필수: 페이지당 출력건수
-                "srchTraStDt": (today - timedelta(days=90)).strftime("%Y%m%d"),  # 1달 전부터
-                "srchTraEndDt": two_months_later.strftime("%Y%m%d"),
+                "srchTraStDt": (today + timedelta(days=30)).strftime("%Y%m%d"),  # 1달 후부터
+                "srchTraEndDt": "",
                 "sort": "DESC",                        # 필수: 정렬방법
                 "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼
                 
@@ -436,40 +436,58 @@ class TrainingAdvisorAgent:
             # 1. 응답 데이터 포맷팅
             formatted_courses = []
             for course in courses:
-                formatted_course = {
-                    # API 응답의 실제 필드명으로 수정
-                    "id": course.get("trprId", ""),                    # 훈련과정ID
-                    "title": course.get("title", ""),                  # 과정명
-                    "institute": course.get("subTitle", ""),           # 훈련기관명
-                    "location": course.get("address", ""),             # 훈련기관 주소 - Pydantic 필수 필드
-                    "period": f"{course.get('traStartDate', '')}~{course.get('traEndDate', '')}", 
-                    "startDate": course.get("traStartDate", ""),      # 시작일
-                    "endDate": course.get("traEndDate", ""),          # 종료일
-                    "cost": course.get("realMan", "0"),               # 실제 훈련비
-                    "description": course.get("contents", ""),         # 과정 설명
-                    "target": course.get("trainTarget", ""),          # 훈련대상
-                    "totalCost": course.get("courseMan", "0"),        # 총 훈련비
-                    "yardMan": course.get("yardMan", "0"),           # 정원
-                    "titleLink": course.get("titleLink", ""),         # 과정 상세 링크
-                    "telNo": course.get("telNo", ""),                # 연락처
-                    "address": course.get("address", ""),            # 훈련기관 주소
-                    "ncsCd": course.get("ncsCd", ""),               # NCS 코드
-                    "grade": course.get("grade", ""),               # 등급
-                    "regCourseMan": course.get("regCourseMan", "0"), # 수강신청 인원
-                    "trainingType": course.get("trainTarget", ""),    # 훈련유형
-                    "trainingTarget": course.get("trainTarget", ""),  # 훈련대상
-                    "employmentRate": {                               # 취업률 정보
-                        "threeMonth": course.get("eiEmplRate3", "0"),
-                        "sixMonth": course.get("eiEmplRate6", "0")
+                try:
+                    # 비용 정보 포맷팅 (천 단위 콤마)
+                    real_cost = course.get("realMan", "0")
+                    total_cost = course.get("courseMan", "0")
+                    
+                    # 문자열에서 콤마 제거 후 숫자로 변환
+                    real_cost = int(real_cost.replace(",", ""))
+                    total_cost = int(total_cost.replace(",", ""))
+                    
+                    # 천 단위 콤마 포맷팅
+                    formatted_real_cost = format(real_cost, ",")
+                    formatted_total_cost = format(total_cost, ",")
+                    
+                    formatted_course = {
+                        # API 응답의 실제 필드명으로 수정
+                        "id": course.get("trprId", ""),                    # 훈련과정ID
+                        "title": course.get("title", ""),                  # 과정명
+                        "institute": course.get("subTitle", ""),           # 훈련기관명
+                        "location": course.get("address", ""),             # 훈련기관 주소 - Pydantic 필수 필드
+                        "period": f"{course.get('traStartDate', '')}~{course.get('traEndDate', '')}", 
+                        "startDate": course.get("traStartDate", ""),      # 시작일
+                        "endDate": course.get("traEndDate", ""),          # 종료일
+                        "cost": formatted_real_cost,  # 천 단위 콤마가 적용된 실제 훈련비
+                        "totalCost": formatted_total_cost,  # 천 단위 콤마가 적용된 총 훈련비               # 실제 훈련비
+                        "description": course.get("contents", ""),         # 과정 설명
+                        "target": course.get("trainTarget", ""),          # 훈련대상
+                        "totalCost": course.get("courseMan", "0"),        # 총 훈련비
+                        "yardMan": course.get("yardMan", "0"),           # 정원
+                        "titleLink": course.get("titleLink", ""),         # 과정 상세 링크
+                        "telNo": course.get("telNo", ""),                # 연락처
+                        "address": course.get("address", ""),            # 훈련기관 주소
+                        "ncsCd": course.get("ncsCd", ""),               # NCS 코드
+                        "grade": course.get("grade", ""),               # 등급
+                        "regCourseMan": course.get("regCourseMan", "0"), # 수강신청 인원
+                        "trainingType": course.get("trainTarget", ""),    # 훈련유형
+                        "trainingTarget": course.get("trainTarget", ""),  # 훈련대상
+                        "employmentRate": {                               # 취업률 정보
+                            "threeMonth": course.get("eiEmplRate3", "0"),
+                            "sixMonth": course.get("eiEmplRate6", "0")
+                        }
                     }
-                }
 
-                # 필수 필드 검증 - title과 location이 있는 경우만 추가
-                if formatted_course["title"] and formatted_course["location"]:
-                    formatted_courses.append(formatted_course)
-                else:
-                    logger.warning(f"[TrainingAdvisor] 필수 필드 누락된 과정 제외: title={formatted_course['title']}, location={formatted_course['location']}")
-
+                    # 필수 필드 검증 - title과 location이 있는 경우만 추가
+                    if formatted_course["title"] and formatted_course["location"]:
+                        formatted_courses.append(formatted_course)
+                    else:
+                        logger.warning(f"[TrainingAdvisor] 필수 필드 누락된 과정 제외: title={formatted_course['title']}, location={formatted_course['location']}")
+                        
+                except ValueError as e:
+                    logger.error(f"비용 포맷팅 중 오류: {str(e)}")
+                    continue
+                
             logger.info(f"[TrainingAdvisor] 포맷팅된 과정 수: {len(formatted_courses)}")
             
             # 2. 중복 제거
