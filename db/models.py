@@ -21,6 +21,7 @@ class UserModel(BaseModel):
     # phone: Optional[str] = Field(None, pattern=r"^010\d{8}$")  # 전화번호. 010으로 시작하는 11자리 숫자
     # email: Optional[EmailStr] = None  # 이메일. 이메일 형식 검사
     gender: Optional[str] = Field(None, pattern="^(male|female|other)$")  # 성별. 'male', 'female', 'other'만 허용
+    # age_range: Optional[str] = Field(None, pattern="^(10~19|20~29|30~39|40~49|50~59|60~69|70~79|80~89|90~99)$")  # 나이대. '10~19', '20~29', '30~39', '40~49', '50~59', '60~69', '70~79', '80~89', '90~99'만 허용
     hope_job: Optional[str] = Field(None, max_length=100)  # 희망 직종. 최대 100자
     hope_location: Optional[str] = Field(None, max_length=100)  # 희망 근무지. 최대 100자
     hope_salary: Optional[int] = None  # 희망 급여. 0 이상

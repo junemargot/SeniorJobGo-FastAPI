@@ -3,11 +3,11 @@
 CRUD 기능을 제공합니다.
 """
 
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException
 from typing import List
+
 from .models import UserModel
 from .database import db
-from fastapi import APIRouter
 
 router = APIRouter()
 
@@ -58,8 +58,3 @@ async def delete_user_by_id(user_id: str):
 async def register_user():
     # 쿠키에 임시로 랜덤한 값을 저장하고 그 값을 사용자 아이디로 임시로 사용하도록 구현 예정입니다.
     return {"message": "This endpoint has not been implemented yet."}
-
-
-
-## 추후 개선 사항
-# - 사용자 정보 업데이트 시 비밀번호 암호화

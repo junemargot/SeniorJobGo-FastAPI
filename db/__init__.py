@@ -3,7 +3,8 @@ db 연결 및 라우터 등록 관련 코드입니다.
 """
 
 from fastapi import FastAPI
-from .database import connect_db, close_db
+
+from .database import close_db, connect_db
 
 # 앱 초기화
 def database_initialize(app: FastAPI):
@@ -23,7 +24,6 @@ def database_initialize(app: FastAPI):
         app.include_router(jobs_router, prefix="/api/v1/jobs")
     except Exception as e:
         raise Exception(f"데이터베이스 초기화 중 오류 발생: {str(e)}")
-
 
 # 앱 종료
 def database_shutdown():
