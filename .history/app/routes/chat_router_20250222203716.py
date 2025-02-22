@@ -39,36 +39,17 @@ def get_job_advisor_agent(request: Request):
 def get_chat_agent(request: Request, llm=Depends(get_llm)):
     return ChatAgent(llm=llm)
 
-async def format_chat_history(user_id: str, limit: int = 3) -> str:
-    """MongoDB에서 최근 N개의 메시지만 가져와서 문자열로 변환"""
-    try:
-        # 최근 메시지만 가져오기
-        chat_result = await db.users.aggregate([
-            {"$match": {"_id": ObjectId(user_id)}},
-            {"$project": {
-                "messages": {"$slice": ["$messages", -limit]}  # 최근 limit개만 가져오기
-            }}
-        ]).to_list(1)
-        
-        if not chat_result:
-            return ""
-            
-        messages = chat_result[0].get("messages", [])
-        history = []
-        
-        for msg in messages:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "user":
-                history.append(f"User: {content}")
-            elif role == "bot":
-                history.append(f"Assistant: {content}")
-                
-        return "\n".join(history)
-        
-    except Exception as e:
-        logger.error(f"대화 이력 조회 중 오류: {str(e)}")
-        return ""
+async def format_chat_history(messages: List[Dict]) -> str:
+    """MongoDB에서 가져온 메시지를 문자열로 변환"""
+    history = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "user":
+            history.append(f"user: {content}")
+        elif role == "bot":
+            history.append(f"bot: {content}")
+    return "\n".join(history[-5:])  # 최근 5개 메시지만 사용
 
 async def save_chat_message(user_id: str, message: Dict) -> bool:
     """새로운 메시지를 사용자의 대화 기록에 저장"""
@@ -109,8 +90,9 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 error_message="사용자 정보를 찾을 수 없습니다."
             )
 
-        # 최근 5개의 대화 이력만 가져오기
-        chat_history = await format_chat_history(str(user["_id"]), limit=5)
+        # chat_history 가져오기
+        messages = user.get("messages", [])
+        chat_history = await format_chat_history(messages)
 
         # NER 추출
         extracted_ner = await extract_ner(
@@ -254,9 +236,9 @@ async def search_training(
             "srchTraArea2": "",    # 상세 지역
             "srchTraStDt": "",     # 시작일
             "srchTraEndDt": "",    # 종료일
-            "pageSize": 100,        # 검색 결과 수
+            "pageSize": 20,        # 검색 결과 수
             "outType": "1",        # 리스트 형태
-            "sort": "ASC",        # 최신순
+            "sort": "DESC",        # 최신순
             "sortCol": "TRNG_BGDE" # 훈련시작일 기준
         }
         
@@ -375,28 +357,14 @@ async def search_training(
     
 
 # policy
-@router.post("/policy/search", response_model=ChatResponse)
-async def search_policies(request: ChatRequest):
+@router.post("/policy/search")
+async def search_policies(request: Request):
     try:
         from app.agents.policy_agent import query_policy_agent
         logger.info(f"[PolicySearch] 정책 검색 요청: {request.user_message}")
-        
-        result = await query_policy_agent(request.user_message)
+        result = query_policy_agent(request.user_message)
         logger.info(f"[PolicySearch] 검색 결과: {result}")
-        
-        # ChatResponse 형식으로 변환
-        response = ChatResponse(
-            message=result.get("message", ""),
-            type="policy",
-            jobPostings=[],
-            trainingCourses=[],
-            policyPostings=result.get("policyPostings", []),
-            mealPostings=[],
-            user_profile=request.user_profile or {}
-        )
-        
-        return response
-        
+        return result
     except Exception as e:
         logger.error(f"[PolicySearch] 오류 발생: {str(e)}")
         raise HTTPException(
@@ -411,7 +379,7 @@ async def search_meals(request: Request, chat_request: ChatRequest):
         # MealAgent 인스턴스 생성
         meal_agent = MealAgent(data_client=PublicDataClient(), llm=request.app.state.llm)
         
-        logger.info(f"[MealSearch] 무료급식소 검색 요청: {chat_request.user_message}")
+        logger.info(f"[MealSearch] 식사 검색 요청: {chat_request.user_message}")
         result = await meal_agent.query_meal_agent(chat_request.user_message)
         logger.info(f"[MealSearch] 검색 결과: {result}")
         return result
@@ -420,8 +388,4 @@ async def search_meals(request: Request, chat_request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail="식사 검색 중 오류가 발생했습니다."
-
         )
-          
-          
-          
