@@ -4,10 +4,12 @@
 
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
-from .models import ChatModel
+from .models import ChatModel, UserModel
 from .database import db
+from datetime import datetime
 
 router = APIRouter()
+
 
 # 채팅 조회 (페이징 처리 추가 예정)
 @router.get("/get/limit/{_id}")
@@ -31,20 +33,8 @@ async def get_chats_by_user(_id: str, end: int, limit: int):
         return {"index": start, "messages": []}
     return {"index": max(start, 0), "messages": chatList[start:end]}
 
-    # 기존 코드 (채팅 기록을 따로 빼두었을 경우)
-    # - 처음에 채팅 기록을 따로 빼두었을 경우 사용하는 코드
-    # - 현재는 채팅 기록을 따로 빼두지 않고 모든 채팅 기록을 한 번에 불러오기 때문에 사용하지 않음
-    # - 코드에 대한 설명은 notion에 남겨두었습니다. (기타 참고자료 > MongoDB 페이징 처리)
-    #   - https://www.notion.so/Backend-2-MongoDB-1f64eb547b2342fc84eb373391c92c31
-    # skip = (page - 1) * page_size  # 건너뛸 문서 수
-
-    # chats = await db.chats.find({"id": user_id, "provider": provider}) \
-    #     .skip(skip) \
-    #     .limit(page_size) \
-    #     .to_list(page_size)
 
 # 모든 채팅 조회
-# 사용하지 않는 메서드이나 참고를 위해 남겨둠.
 @router.get("/get/all/{_id}")
 async def get_all_chats(_id: str):
     user = await db.users.find_one({"_id": ObjectId(_id)})
@@ -52,9 +42,8 @@ async def get_all_chats(_id: str):
         raise HTTPException(status_code=404, detail="User not found")
     return user["messages"]
 
+
 # 모든 채팅 삭제
-# 데이터베이스에서 대화를 삭제하고 싶다면 사용하는 메서드
-# 사용하지 않는 메서드이나 참고를 위해 남겨둠.
 @router.delete("/delete/all/{_id}")
 async def delete_all_chats(_id: str) -> bool:
     user = await db.users.find_one({"_id": ObjectId(_id)})
@@ -66,20 +55,60 @@ async def delete_all_chats(_id: str) -> bool:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 대화 추가 메서드
-# 사용하지 않는 메서드이나 참고를 위해 남겨둠.
+
+# 채팅 메시지 추가
+@router.post("/add/{_id}")
+async def add_chat_message(user: UserModel, user_message: str, bot_message: str):
+    try:
+        chat_index = len(user.get("messages", []))
+
+        user_message_model = ChatModel(
+            role="user",
+            content=user_message,
+            index=chat_index,
+            created_at=datetime.now(),
+        )
+
+        bot_message_model = ChatModel(
+            role="bot",
+            content=bot_message,
+            index=chat_index + 1,
+            created_at=datetime.now(),
+        )
+
+        await db.users.update_one(
+            {"_id": ObjectId(user.get("_id"))},
+            {
+                "$push": {
+                    "messages": {
+                        "$each": [
+                            user_message_model.model_dump(),
+                            bot_message_model.model_dump(),
+                        ]
+                    }
+                }
+            },
+        )
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 대화 추가 메서드 (단일 메시지)
 @router.post("/add/{provider}/{user_id}")
 async def add_message_to_user_chat_list(user_id: str, provider: str, chat: ChatModel):
     user = await db.users.find_one({"id": user_id, "provider": provider})
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # 기존 메시지 목록을 가져와서 새로운 메시지를 추가
     existing_messages = user.get("messages", [])
-    existing_messages.append(chat.model_dump())  # 새로운 메시지를 추가
+    existing_messages.append(chat.model_dump())
 
     # 업데이트된 사용자 정보를 MongoDB에 저장
-    await db.users.update_one({"id": user_id, "provider": provider}, {"$set": {"messages": existing_messages}})
+    await db.users.update_one(
+        {"id": user_id, "provider": provider}, {"$set": {"messages": existing_messages}}
+    )
 
     return {"detail": "Chat message added successfully", "messages": existing_messages}

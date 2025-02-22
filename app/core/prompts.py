@@ -1,5 +1,4 @@
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-
 from app.utils.constants import DICTIONARY
 import re
 
@@ -12,20 +11,6 @@ def apply_dictionary_rules(query: str) -> str:
 
 
 # 문서 검증 프롬프트
-# verify_prompt = PromptTemplate.from_template("""
-# 다음 문서들이 사용자의 질문에 답변하기에 충분한 정보를 포함하고 있는지 판단해주세요.
-
-# 질문: {query}
-
-# 문서들:
-# {context}
-
-# 답변 형식:
-# - 문서가 충분한 정보를 포함하고 있다면 "YES"
-# - 문서가 충분한 정보를 포함하고 있지 않다면 "NO"
-
-# 답변:
-# """)
 verify_prompt = PromptTemplate.from_template(
     """
 Please determine whether the following documents contain enough information to answer the user's question.
@@ -44,14 +29,6 @@ Answer:
 )
 
 # 질문 변환 프롬프트 (DICTIONARY 적용됨)
-# rewrite_prompt = PromptTemplate.from_template("""
-# 사용자의 질문을 보고, 우리의 사전을 참고해서 사용자의 질문을 변경해주세요.
-# 이때 반드시 사전에 있는 규칙을 적용해야 합니다.
-
-# 원본 질문: {original_query}
-
-# 변경된 질문: {transformed_query}
-# """)
 rewrite_prompt = PromptTemplate.from_template(
     """
 Look at the user's question and refer to our dictionary to modify the user's question.
@@ -61,7 +38,6 @@ Original question: {original_query}
 
 Modified question: {transformed_query}"""
 )
-
 
 # 채용 공고 추천 프롬프트
 generate_prompt = PromptTemplate.from_template(
@@ -164,7 +140,7 @@ Examples:
 """
 )
 
-# 의도 분류 프롬프트 수정
+# 의도 분류 프롬프트
 CLASSIFY_INTENT_PROMPT = PromptTemplate.from_template(
     """
 You are an expert career counselor specializing in senior job seekers. Your task is to accurately identify the user's intent, particularly focusing on job search or vocational training intentions.
@@ -215,7 +191,7 @@ Examples:
 """
 )
 
-# 재랭킹 프롬프트 추가
+# 재랭킹 프롬프트
 rerank_prompt = PromptTemplate.from_template(
     """
 Please compare the user's search criteria to each job posting and rate how well each posting matches.
@@ -235,11 +211,10 @@ Evaluation criteria:
 - Matching age group: +1 point
 - Nearby region: +1 point
 - Similar job: +1 point
-
 """
 )
 
-# 훈련정보 관련 프롬프트 추가
+# 훈련정보 관련 프롬프트
 TRAINING_PROMPT = PromptTemplate.from_template(
     """
 You are a vocational training counselor for senior job seekers.
@@ -259,10 +234,10 @@ Special rules:
 1. If the region is not specified, leave it as an empty string.
 2. If the training program name is not specified, leave it as an empty string.
 3. The duration and cost are optional.
-
 """
 )
 
+# 훈련정보 추출 프롬프트
 TRAINING_EXTRACT_PROMPT = PromptTemplate.from_template(
     """
 Extract training/education-related information from the user's message.
@@ -330,7 +305,7 @@ Important Notes:
 """
 )
 
-# 이력서 작성 가이드 프롬프트 추가
+# 이력서 작성 가이드 프롬프트
 RESUME_GUIDE_PROMPT = PromptTemplate.from_template(
     """
 You are a professional career counselor specializing in helping senior job seekers write effective resumes.
@@ -397,7 +372,7 @@ Response should be structured as:
 """
 )
 
-# 이력서 피드백 프롬프트 추가
+# 이력서 피드백 프롬프트
 RESUME_FEEDBACK_PROMPT = PromptTemplate.from_template(
     """
 You are a professional resume reviewer specializing in senior job seeker resumes.
@@ -445,6 +420,7 @@ Remember:
 """
 )
 
+# 지원서 작성 프롬프트
 application_prompt = PromptTemplate(
     template="""당신은 어르신들의 이력서와 이메일을 작성하는 전문가입니다.
 친절하고 공손한 태도로 어르신들의 경력과 경험을 잘 살려 문서를 작성해주세요.

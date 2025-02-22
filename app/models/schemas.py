@@ -1,14 +1,18 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class ChatRequest(BaseModel):
+    """채팅 요청 스키마"""
+
     user_message: str
     user_profile: Optional[dict] = None
     session_id: Optional[str] = None
 
 
 class JobPosting(BaseModel):
+    """채용 공고 스키마"""
+
     id: int
     title: str
     company: str
@@ -27,6 +31,8 @@ class JobPosting(BaseModel):
 
 
 class TrainingCourse(BaseModel):
+    """훈련과정 스키마"""
+
     id: str
     title: str
     institute: str
@@ -42,7 +48,20 @@ class TrainingCourse(BaseModel):
     telNo: Optional[str] = None
 
 
+class TrainingSearchRequest(BaseModel):
+    """훈련정보 검색 요청 스키마"""
+
+    location: Optional[str] = None  # 지역 (예: "서울 강남구")
+    city: Optional[str] = None  # 시/도
+    district: Optional[str] = None  # 구/군
+    interests: List[str] = []  # 관심 분야
+    preferredTime: Optional[str] = None  # 선호 교육시간
+    preferredDuration: Optional[str] = None  # 선호 교육기간
+
+
 class ChatResponse(BaseModel):
+    """채팅 응답 스키마"""
+
     type: str  # 'list' 또는 'detail'
     message: str
     jobPostings: List[JobPosting]
@@ -51,7 +70,19 @@ class ChatResponse(BaseModel):
     processingTime: float = 0  # 처리 시간 추가
 
 
+# 정책 검색 요청 모델 정의
+class PolicySearchRequest(BaseModel):
+    """정책 검색 요청 모델"""
+
+    user_message: str
+    user_profile: Dict = {}
+    session_id: Optional[str] = None
+
+
+# 이력서 관련 모델 추가
 class Education(BaseModel):
+    """교육 이력 스키마"""
+
     school: str = ""
     major: str = ""
     degree: str = ""
@@ -59,6 +90,8 @@ class Education(BaseModel):
 
 
 class Experience(BaseModel):
+    """경력 이력 스키마"""
+
     company: str = ""
     position: str = ""
     period: str = ""
@@ -66,6 +99,8 @@ class Experience(BaseModel):
 
 
 class ResumeData(BaseModel):
+    """이력서 데이터 스키마"""
+
     name: str = ""
     email: str = ""
     phone: str = ""
@@ -93,16 +128,22 @@ class ResumeData(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    # 필요한 필드 정의
-    pass
+    """이력서 요청 스키마"""
+
+    user_info: Optional[Dict] = None
+    resume_data: Optional[ResumeData] = None
 
 
 class ResumeResponse(BaseModel):
+    """이력서 응답 스키마"""
+
     message: str
     resume: ResumeData
 
 
 class AdvisorResponse(BaseModel):
+    """상담사 응답 스키마"""
+
     content: str
     suggestions: Optional[List[str]] = None
     next_step: Optional[str] = None
