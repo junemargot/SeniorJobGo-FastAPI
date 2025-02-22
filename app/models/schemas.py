@@ -41,14 +41,24 @@ class TrainingCourse(BaseModel):
     titleLink: Optional[str] = None
     telNo: Optional[str] = None
 
-class TrainingSearchRequest(BaseModel):
-    """훈련정보 검색 요청 스키마"""
-    location: Optional[str] = None  # 지역 (예: "서울 강남구")
-    city: Optional[str] = None      # 시/도
-    district: Optional[str] = None  # 구/군
-    interests: List[str] = []       # 관심 분야
-    preferredTime: Optional[str] = None    # 선호 교육시간
-    preferredDuration: Optional[str] = None # 선호 교육기간
+
+class PolicyPosting(BaseModel):
+    source: str
+    title: str
+    target: str
+    content: str
+    applyMethod: str
+    contact: str
+    url: str
+
+class MealPosting(BaseModel):
+    name: str
+    address: str
+    phone: str
+    operatingHours: str
+    targetGroup: str
+    description: str 
+
 
 class ChatResponse(BaseModel):
     """채팅 응답 스키마"""
@@ -56,12 +66,9 @@ class ChatResponse(BaseModel):
     message: str
     jobPostings: List[JobPosting]
     trainingCourses: List[TrainingCourse] = []  # 훈련과정 정보 추가
+    policyPostings: List[PolicyPosting] = []  # 정책 정보 추가
+    mealPostings: List[MealPosting] = []  # 식사 정보 추가
     user_profile: Optional[dict] = None
-    processingTime: float = 0  # 처리 시간 추가 
+    processingTime: float = 0  # 처리 시간 추가
 
-# 정책 검색 요청 모델 정의
-class PolicySearchRequest(BaseModel):
-    """정책 검색 요청 모델"""
-    user_message: str
-    user_profile: Dict = {}
-    session_id: Optional[str] = None
+

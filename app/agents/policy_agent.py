@@ -11,6 +11,8 @@ import re
 from dotenv import load_dotenv
 from functools import partial
 from typing import Dict, List
+from datetime import datetime, timedelta
+
 
 # 로깅 설정 보완
 logging.basicConfig(
@@ -30,7 +32,8 @@ logger.info("환경변수 로드 완료")
 # OpenAI 및 Tavily 설정
 llm = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0
+    temperature=0.4
+
 )
 
 search = TavilySearchResults(
@@ -53,14 +56,16 @@ search = TavilySearchResults(
     time_frame="3m"
 )
 
-POLICY_EXTRACTION_PROMPT = """**정책 정보 추출 요청**  
-다음 웹 페이지에서 **고령층 관련 정책 정보**를 분석하여 정리해 주세요.  
+
+POLICY_EXTRACTION_PROMPT = """정책 정보 추출 요청
+다음 웹 페이지에서 고령층 관련 정책 정보를 분석하여 정리해 주세요.  
 필수 항목을 정확하게 추출하고, 찾을 수 없는 정보는 `"정보 없음"`으로 표시하세요. 
 
 
- **응답 형식**
+응답 형식
 
-[결과 1] 
+[결과 양식] 
+
 - 출처: (기관명)
 - 제목: (제목)
 - 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
@@ -69,30 +74,12 @@ POLICY_EXTRACTION_PROMPT = """**정책 정보 추출 요청**
 - 연락처: (담당기관 및 전화번호, 문의처 등)
 - URL: (링크)
 
-[결과 2]
-- 출처: (기관명)
-- 제목: (제목)
-- 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
-- 주요 내용: (핵심 내용 요약)
-- 신청 방법: (신청 절차, 필요 서류 등)
-- 연락처: (담당기관 및 전화번호, 문의처 등)
-- URL: (링크)
-
-[결과 3]
-- 출처: (기관명)
-- 제목: (제목)
-- 지원 대상: (연령, 자격요건 등. 없으면 `"고령층 대상"`)
-- 주요 내용: (핵심 내용 요약)
-- 신청 방법: (신청 절차, 필요 서류 등)
-- 연락처: (담당기관 및 전화번호, 문의처 등)
-- URL: (링크)
-
-**검색어:** {input}
-
-📄 **웹 페이지 내용:**  
+검색어: {input}
+웹 페이지 내용
 {text}
 
- **주의 사항**
+ 주의 사항
+
 - 모든 항목을 가능한 한 구체적으로 작성하세요.
 - 정보를 찾을 수 없는 경우 `"정보 없음"`으로 표기하세요.
 """
@@ -101,6 +88,10 @@ POLICY_EXTRACTION_PROMPT = """**정책 정보 추출 요청**
 tools = [
     Tool(
         name="Web_Search",
+
+        # description=f"{(datetime.now() - timedelta(days=60)).strftime('%Y년 %m월')} 이후에 등록된 중장년층 관련 정보나 뉴스를 웹에서 검색합니다.",
+
+
         description="2024년 10월 이후에 등록된 중장년층 관련 정보나 뉴스를 웹에서 검색합니다.",
         func=partial(search.run)  # 함수 바인딩 문제 해결
     )
@@ -142,7 +133,10 @@ agent_executor = AgentExecutor(
     tools=tools,
     verbose=True,
     handle_parsing_errors=True,
-    max_iterations=2,
+
+    return_intermediate_steps=True,  # 중간 단계 결과 반환
+    max_iterations=1,
+
     max_execution_time=100
 )
 
@@ -171,14 +165,21 @@ def extract_policy_info(content: str) -> Dict:
     try:
         # 컨텐츠 전처리
         content = clean_text(content)
-        if len(content) > 2000:
-            content = content[:2000]
+
+        # if len(content) > 2000:
+        #     content = content[:2000]
+
+        logger.info(f"컨텐츠 전처리 후: {content}")
+
 
         # POLICY_EXTRACTION_PROMPT 사용
         messages = [
             {
                 "role": "system",
                 "content": POLICY_EXTRACTION_PROMPT.format(
+
+                    # input=f"{(datetime.now() - timedelta(days=60)).strftime('%Y년 %m월')} 이후에 등록된 중장년층 관련 정책 정보를 추출해주세요",
+
                     input="2024년 10월 이후에 등록된 중장년층 관련 정책 정보를 추출해주세요",
                     text=content  # 웹페이지 내용
                 )
@@ -190,13 +191,15 @@ def extract_policy_info(content: str) -> Dict:
 
         # 정보 추출 및 구조화
         pattern_dict = {
-            "출처": r"출처:\s*(.+?)(?:\n|$)",
-            "제목": r"제목:\s*(.+?)(?:\n|$)",
-            "지원_대상": r"지원 대상:\s*(.+?)(?:\n|$)",
-            "주요_내용": r"주요 내용:\s*(.+?)(?:\n|$)",
-            "신청_방법": r"신청 방법:\s*(.+?)(?:\n|$)",
-            "연락처": r"연락처:\s*(.+?)(?:\n|$)",
-            "URL": r"URL:\s*(.+?)(?:\n|$)"
+
+            "source": r"출처:\s*(.+?)(?:\n|$)",
+            "title": r"제목:\s*(.+?)(?:\n|$)",
+            "target": r"지원 대상:\s*(.+?)(?:\n|$)",
+            "content": r"주요 내용:\s*(.+?)(?:\n|$)",
+            "applyMethod": r"신청 방법:\s*(.+?)(?:\n|$)",
+            "contact": r"연락처:\s*(.+?)(?:\n|$)",
+            "url": r"URL:\s*(.+?)(?:\n|$)"
+
         }
 
         # 기본값 "-"으로 초기화
@@ -221,7 +224,9 @@ def extract_policy_info(content: str) -> Dict:
         logger.error(f"정책 정보 추출 중 오류: {str(e)}")
         return None
 
-def query_policy_agent(query: str) -> Dict:
+
+async def query_policy_agent(query: str) -> Dict:
+
     """정책 검색 함수 - 최적화 버전"""
     try:
         logger.info(f"[PolicyAgent] 정책 검색 시작: {query}")
@@ -232,14 +237,19 @@ def query_policy_agent(query: str) -> Dict:
         policies = []
 
         try:
-            web_results = search.run(enhanced_query)
+
+            # Tavily 검색을 비동기로 변경
+            web_results = await search.arun(enhanced_query)  # .run() -> .arun()
+
             logger.info(f"[PolicyAgent] Tavily 검색 결과: {len(web_results)}건")
             
             if not web_results:
                 return {
                     "message": "검색 결과가 없습니다. 다른 검색어로 시도해보세요.",
-                    "search_result": {"policies": []},
-                    "type": "policy_search"
+
+                    "policyPostings": [],
+                    "type": "policy"
+
                 }
             
             # 검색 결과가 문자열로 반환되는 경우 처리
@@ -263,12 +273,14 @@ def query_policy_agent(query: str) -> Dict:
                         "kordi.or.kr": "한국노인인력개발원"
                     }
                     formatted_domain = domain_mapping.get(domain, domain)
-                    
+
+
                     # 빠른 정보 추출
                     policy_info = extract_policy_info(content)
                     if policy_info:
-                        policy_info["출처"] = formatted_domain
-                        policy_info["URL"] = url
+                        policy_info["source"] = formatted_domain
+                        policy_info["url"] = url
+
                         policies.append(policy_info)
                     
                 except Exception as item_error:
@@ -277,22 +289,28 @@ def query_policy_agent(query: str) -> Dict:
 
             return {
                 "message": "정책 정보 검색 결과입니다.",
-                "search_result": {"policies": policies[:3]},  # 상위 3개만 반환
-                "type": "policy_search"
+
+                "policyPostings": policies[:3],  # 상위 3개만 반환
+                "type": "policy"
+
             }
 
         except Exception as web_error:
             logger.error(f"[PolicyAgent] 검색 오류: {str(web_error)}")
             return {
                 "message": "검색 중 오류가 발생했습니다.",
-                "search_result": {"policies": []},
-                "type": "policy_search"
+
+                "policyPostings": [],
+                "type": "policy"
+
             }
 
     except Exception as e:
         logger.error(f"[PolicyAgent] 오류 발생: {str(e)}")
         return {
             "message": "검색 중 오류가 발생했습니다.",
-            "search_result": {"policies": []},
-            "type": "policy_search"
+
+            "policyPostings": [],
+            "type": "error"
+
         }

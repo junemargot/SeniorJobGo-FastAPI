@@ -16,6 +16,13 @@ from app.services import initialize_vector_store
 from app.routes import register_routes
 from db import database_initialize, database_shutdown
 
+from app.routes import userInform_router
+from app.routes import training_router
+from app.agents.supervisor_agent import SupervisorAgent
+from app.agents.chat_agent import ChatAgent
+from app.services.meal_data_client import PublicDataClient
+
+
 # 로깅 설정을 더 자세하게
 logging.basicConfig(
     level=logging.INFO,
@@ -36,7 +43,21 @@ async def lifespan(app: FastAPI):
         
         # LLM과 에이전트 초기화 (.agents/)
         logger.info("LLM과 에이전트를 초기화합니다.")
-        initialize_agents(app)
+
+        llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.5,
+            request_timeout=30
+        )
+        app.state.llm = llm  # 앱 상태에 저장
+        
+        # 에이전트 초기화
+        app.state.supervisor = SupervisorAgent(llm)
+        app.state.job_advisor = JobAdvisorAgent(llm, vector_search)
+        app.state.training_advisor = TrainingAdvisorAgent(llm)
+        app.state.chat_agent = ChatAgent(llm)  # ChatAgent 추가
+
+
         logger.info("LLM과 에이전트 초기화 완료")
 
         # 라우터 등록 (.routes/, ..db/)
@@ -44,6 +65,9 @@ async def lifespan(app: FastAPI):
         database_initialize(app)
         register_routes(app)
         logger.info("데이터베이스 초기화 및 라우터 등록 완료")
+
+        # data_client 초기화 및 등록
+        app.state.data_client = PublicDataClient()
 
     except Exception as e:
         logger.error(f"초기화 중 오류 발생: {str(e)}", exc_info=True)

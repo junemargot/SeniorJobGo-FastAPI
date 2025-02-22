@@ -107,7 +107,7 @@ class VectorStoreSearch:
             "답변은 JSON 형식: {\"scores\": [5,3,2,...]}.\n\n"
             + "\n".join(doc_snippets)
         )
-        logger.info(f"[LLM Re-rank Prompt]\n{prompt_text}")
+        # logger.info(f"[LLM Re-rank Prompt]\n{prompt_text}")
 
         resp = llm.invoke(prompt_text)
         content = resp.content.replace("```json", "").replace("```", "").strip()
@@ -185,72 +185,33 @@ class VectorStoreSearch:
         filter_condition = None
         conditions = []
         
+        filter_condition = {}
+        conditions = []
+        
         if region:
-            conditions.append({"근무지역": {"$contains": region}})
+            conditions.append({"$contains": region})
         if job:
-            conditions.append({"채용제목": {"$contains": job}})
+            conditions.append({"$contains": job})
 
         if len(conditions) > 1:
-            if use_and:
-                filter_condition = {"$and": conditions}
-            else:
-                filter_condition = {"$or": conditions}
-        elif conditions:
+            filter_condition = {"$and": conditions}
+        elif len(conditions) == 1:
             filter_condition = conditions[0]
+        else:
+            filter_condition = None  # 조건이 없으면 None을 전달합니다.
 
-        try:
-            if filter_condition:
-                results_with_score = self.vectorstore.similarity_search_with_score(
-                    query=query,
-                    k=top_k*3,
-                    where_document=filter_condition
-                )
-            else:
-                # 필터 없이 검색
-                results_with_score = self.vectorstore.similarity_search_with_score(
-                    query=query,
-                    k=top_k*3
-                )
-            
-            # 거리(distance) 기준으로 정렬
-            results_with_score.sort(key=lambda x: x[1])
-            selected_docs = [doc for doc, score in results_with_score[:top_k]]
-            
-            # 검색 거리 메타데이터 추가
-            for doc, dist in zip(selected_docs, [score for _, score in results_with_score[:top_k]]):
-                doc.metadata["search_distance"] = dist
-                
-            return selected_docs
-            
-        except Exception as e:
-            logger.error(f"[VectorStore] 검색 중 에러 발생: {str(e)}")
-            return []
+        results_with_score = self.vectorstore.similarity_search_with_score(
+            query=query,
+            k=top_k*3,
+            where_document=filter_condition
+        )
+        results_with_score.sort(key=lambda x: x[1])  # score(거리) 오름차순
+        selected_docs = [doc for doc, score in results_with_score[:top_k]]
 
-    def _advanced_param_search(self, query: Dict[str, Any], top_k: int = 20) -> List[Document]:
-        """새로운 고급 파라미터 기반 검색"""
-        try:
-            conditions = self._build_search_conditions(query)
-            if not conditions:
-                results = self.vectorstore.similarity_search(
-                    query=str(query),
-                    k=top_k
-                )
-                return results
-                
-            filter_condition = conditions[0]
-            for condition in conditions[1:]:
-                filter_condition = filter_condition & condition
+        for i, (doc, dist) in enumerate(results_with_score[:top_k]):
+            doc.metadata["search_distance"] = dist
 
-            results = self.vectorstore.similarity_search_with_score(
-                query=str(query),
-                k=top_k,
-                where_document=filter_condition
-            )
-            return [doc for doc, _ in results]
-        except Exception as ex:
-            logger.warning(f"고급 검색 실패: {ex}")
-            return []
-
+        return selected_docs
 
     def search_jobs(self, user_ner: dict, top_k: int = 10) -> List[Document]:
         """

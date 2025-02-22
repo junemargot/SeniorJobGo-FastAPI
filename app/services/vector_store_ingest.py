@@ -13,6 +13,7 @@ from langchain.docstore.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
+import uuid
 
 
 load_dotenv()
@@ -201,8 +202,8 @@ class VectorStoreIngest:
             # 텍스트 청크
             splits = self.text_splitter.split_text(combined_text)
             for idx_chunk, chunk_text in enumerate(splits):
-                doc_id = f"{posting_id}_chunk{idx_chunk}_{hash(chunk_text[:50])}"
-                doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', doc_id)
+                # UUID를 사용하여 고유 ID 생성
+                doc_id = str(uuid.uuid4())  # 완전히 고유한 ID 생성
                 
                 chunk_metadata = {
                     "채용공고ID": posting_id,
@@ -214,8 +215,9 @@ class VectorStoreIngest:
                     "세부요건": requirements_text,
                     "채용공고URL": job_posting_url,
                     "chunk_index": idx_chunk,
-                    "unique_id": doc_id
+                    "unique_id": doc_id  # 메타데이터에도 UUID 저장
                 }
+                
                 # 메타데이터 단순화
                 chunk_metadata.update(ner_data)
                 chunk_metadata = self._simplify_metadata(chunk_metadata)
@@ -225,7 +227,7 @@ class VectorStoreIngest:
                     metadata=chunk_metadata
                 )
                 documents.append(doc)
-                doc_ids.append(doc_id)
+                doc_ids.append(doc_id)  # UUID를 doc_ids 리스트에 추가
 
             logger.info(
                 f"[{idx_item+1}] 공고번호: {posting_id}, "
@@ -250,14 +252,13 @@ class VectorStoreIngest:
                 "추출해야 할 정보:\n"
                 "- 직무\n"
                 "- 회사명\n"
-                "- 근무 지역\n"
+                "- 근무지역\n"
                 "- 연령대\n"
                 "- 경력조건\n"
                 "- 학력\n"
                 "- 고용형태\n"
                 "- 모집인원\n"
                 "- 장애인 채용인원\n"
-                "- 근무예정지\n"
                 "- 모집직종\n"
                 "- 직종키워드\n"
                 "- 임금조건\n"
@@ -265,7 +266,6 @@ class VectorStoreIngest:
                 "- 근무형태\n"
                 "- 사회보험\n"
                 "- 퇴직급여\n"
-                "- 근무 지역\n"
                 "- 접수마감일\n"
                 "- 전형방법\n"
                 "- 접수방법\n"

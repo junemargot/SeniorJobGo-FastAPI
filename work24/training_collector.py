@@ -8,7 +8,6 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from app.utils.constants import SEOUL_DISTRICT_CODES, AREA_CODES
 from .config import (
     TRAINING_APIS,
     WORK24_COMMON_URL,
@@ -87,7 +86,7 @@ class TrainingCollector:
         
         # 현재 날짜 기준으로 3개월 기간 설정
         today = datetime.now()
-        three_months_later = today + timedelta(days=90)
+        half_year_later = today + timedelta(days=180)
         
         # 기본 파라미터 설정 (공식 API 문서 기준)
         default_params = {
@@ -97,8 +96,8 @@ class TrainingCollector:
             "pageNum": "1",                        # 필수: 시작페이지 (최대 1000)
             "pageSize": "100",                     # 필수: 페이지당 출력건수 (최대 100)
             "srchTraStDt": today.strftime("%Y%m%d"),           # 필수: 훈련시작일 From
-            "srchTraEndDt": three_months_later.strftime("%Y%m%d"), # 필수: 훈련시작일 To
-            "sort": "DESC",                        # 필수: 정렬방법 (ASC/DESC)
+            "srchTraEndDt": half_year_later.strftime("%Y%m%d"), # 필수: 훈련시작일 To
+            "sort": "ASC",                        # 필수: 정렬방법 (ASC/DESC)
             "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼 (TRNG_BGDE: 훈련시작일)
             
             # 선택적 파라미터
@@ -123,19 +122,23 @@ class TrainingCollector:
                 default_params["srchNcs2"] = params["srchNcs2"]
             if "srchNcs3" in params and params["srchNcs3"]:
                 default_params["srchNcs3"] = params["srchNcs3"]
-                
+            
             # 지역 처리
             if "srchTraArea1" in params and params["srchTraArea1"]:
                 default_params["srchTraArea1"] = params["srchTraArea1"]
             if "srchTraArea2" in params and params["srchTraArea2"]:
                 default_params["srchTraArea2"] = params["srchTraArea2"]
-                
+            
             # 날짜 처리
             if "srchTraStDt" in params:
                 default_params["srchTraStDt"] = params["srchTraStDt"]
             if "srchTraEndDt" in params:
                 default_params["srchTraEndDt"] = params["srchTraEndDt"]
-                
+            
+            # 검색어 처리
+            if "srchTraProcessNm" in params and params["srchTraProcessNm"]:
+                default_params["srchTraProcessNm"] = params["srchTraProcessNm"]
+            
             # 기타 파라미터 업데이트
             for key in ["pageSize", "outType", "sort", "sortCol"]:
                 if key in params:
@@ -143,15 +146,11 @@ class TrainingCollector:
         
         # API 요청 전 캐시 무효화를 위한 타임스탬프 추가
         default_params["timestamp"] = str(int(time.time()))
+        print(f"최종 요청 파라미터: {default_params}")  # 디버깅용
         
-        data = self._make_api_request(url, default_params)
-        if data and isinstance(data, dict):
-            # API 응답 구조에 맞게 처리
-            if "srchList" in data and "scn_list" in data["srchList"]:
-                return data["srchList"]["scn_list"]
-            elif "srchList" in data:
-                return data["srchList"]
-        return []
+        response = self._make_api_request(url, default_params)
+        print(f"API 응답: {json.dumps(response, ensure_ascii=False, indent=2)}")  # 디버깅용
+        return response
         
     def _fetch_training_info(self, api_type: str, course_id: str, course_degr: str) -> Optional[Dict]:
         """훈련과정 상세 정보 조회"""
