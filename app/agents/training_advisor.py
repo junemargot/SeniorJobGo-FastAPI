@@ -142,7 +142,7 @@ class TrainingAdvisorAgent:
                 "returnType": "JSON",                  # 필수: 리턴타입
                 "outType": "1",                        # 필수: 출력형태 (1:리스트)
                 "pageNum": "1",                        # 필수: 시작페이지
-                "pageSize": "50",                      # 필수: 페이지당 출력건수
+                "pageSize": "100",                      # 필수: 페이지당 출력건수
                 "srchTraStDt": (today + timedelta(days=30)).strftime("%Y%m%d"),  # 1달 후부터
                 "srchTraEndDt": "",
                 "sort": "DESC",                        # 필수: 정렬방법
@@ -535,11 +535,25 @@ class TrainingAdvisorAgent:
         if search_terms := search_options.get("search_terms", []):
             filtered_courses = [
                 course for course in filtered_courses
-                if any(term.lower() in course.get("title", "").lower() for term in search_terms)
+                if any(
+                    term.lower() in course.get("title", "").lower() or  # 제목에서 검색
+                    term.lower() in course.get("description", "").lower() or  # 설명에서 검색
+                    term.lower() in course.get("institute", "").lower() or  # 교육기관에서 검색
+                    term.lower() in course.get("target", "").lower()  # 교육대상에서 검색
+                    for term in search_terms
+                )
             ]
+            
+            logger.info(f"[TrainingAdvisor] 검색어 '{search_terms}'로 필터링된 과정 수: {len(filtered_courses)}")
         
         # 2. 비용순 정렬
         if search_options.get("is_low_cost"):
             filtered_courses.sort(key=lambda x: int(x.get("cost", "0").replace(",", "")))
+            logger.info("[TrainingAdvisor] 비용순으로 정렬됨")
+        
+        # 3. 결과가 없는 경우 원본 데이터 반환
+        if not filtered_courses and courses:
+            logger.warning("[TrainingAdvisor] 필터링 결과가 없어 전체 과정을 반환합니다")
+            return courses[:5]  # 상위 5개만 반환
         
         return filtered_courses

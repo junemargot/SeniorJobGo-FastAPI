@@ -252,7 +252,7 @@ async def search_training(
             "srchTraArea2": "",    # 상세 지역
             "srchTraStDt": "",     # 시작일
             "srchTraEndDt": "",    # 종료일
-            "pageSize": 20,        # 검색 결과 수
+            "pageSize": 100,        # 검색 결과 수
             "outType": "1",        # 리스트 형태
             "sort": "DESC",        # 최신순
             "sortCol": "TRNG_BGDE" # 훈련시작일 기준
