@@ -17,7 +17,6 @@ import time
 from typing import List, Dict
 from datetime import datetime
 from app.agents.meal_agent import MealAgent
-from app.services.data_client import PublicDataClient
 
 logger = logging.getLogger(__name__)
 
@@ -374,13 +373,13 @@ async def search_policies(request: Request):
     
 # meals
 @router.post("/meals/search")
-async def search_meals(request: Request, chat_request: ChatRequest):
+async def search_meals(request: Request):
     try:
         # MealAgent 인스턴스 생성
         meal_agent = MealAgent(data_client=PublicDataClient(), llm=request.app.state.llm)
         
-        logger.info(f"[MealSearch] 무료급식소 검색 요청: {chat_request.user_message}")
-        result = await meal_agent.query_meal_agent(chat_request.user_message)
+        logger.info(f"[MealSearch] 식사 검색 요청: {request.user_message}")
+        result = await meal_agent.query_meal_agent(request.user_message)  # 인스턴스를 통해 메서드 호출
         logger.info(f"[MealSearch] 검색 결과: {result}")
         return result
     except Exception as e:

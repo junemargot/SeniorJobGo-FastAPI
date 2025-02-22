@@ -16,8 +16,6 @@ import json
 import time
 from typing import List, Dict
 from datetime import datetime
-from app.agents.meal_agent import MealAgent
-from app.services.data_client import PublicDataClient
 
 logger = logging.getLogger(__name__)
 
@@ -370,22 +368,4 @@ async def search_policies(request: Request):
         raise HTTPException(
             status_code=500,
             detail="정책 검색 중 오류가 발생했습니다."
-        )
-    
-# meals
-@router.post("/meals/search")
-async def search_meals(request: Request, chat_request: ChatRequest):
-    try:
-        # MealAgent 인스턴스 생성
-        meal_agent = MealAgent(data_client=PublicDataClient(), llm=request.app.state.llm)
-        
-        logger.info(f"[MealSearch] 무료급식소 검색 요청: {chat_request.user_message}")
-        result = await meal_agent.query_meal_agent(chat_request.user_message)
-        logger.info(f"[MealSearch] 검색 결과: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"[MealSearch] 오류 발생: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="식사 검색 중 오류가 발생했습니다."
         )
