@@ -133,19 +133,19 @@ class TrainingAdvisorAgent:
             logger.info(f"[TrainingAdvisor] 사용자 NER: {user_ner}")
             logger.info(f"[TrainingAdvisor] 사용자 프로필: {user_profile}")
             
-            # 오늘부터 2개월 내 시작하는 과정 검색
+            # 오늘부터 6개월 내 시작하는 과정 검색
             today = datetime.now()
-            two_months_later = today + timedelta(days=60)
+            half_year_later = today + timedelta(days=180)
             
             # Work24 API 필수 파라미터
             params = {
                 "returnType": "JSON",                  # 필수: 리턴타입
                 "outType": "1",                        # 필수: 출력형태 (1:리스트)
                 "pageNum": "1",                        # 필수: 시작페이지
-                "pageSize": "50",                      # 필수: 페이지당 출력건수
-                "srchTraStDt": (today - timedelta(days=90)).strftime("%Y%m%d"),  # 1달 전부터
-                "srchTraEndDt": two_months_later.strftime("%Y%m%d"),
-                "sort": "DESC",                        # 필수: 정렬방법
+                "pageSize": "100",                      # 필수: 페이지당 출력건수
+                "srchTraStDt": today.strftime("%Y%m%d"),  # 오늘부터
+                "srchTraEndDt": half_year_later.strftime("%Y%m%d"),  # 6개월 후까지
+                "sort": "ASC",                        # 필수: 정렬방법
                 "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼
                 
                 # 검색 조건
@@ -210,29 +210,35 @@ class TrainingAdvisorAgent:
                 interests = list(set(filter(None, interests)))
                 target = interests[0]  # 첫 번째 관심분야 사용
                 
-                # NCS 코드 매핑
-                if target in self.interest_ncs_mapping:
-                    mapping = self.interest_ncs_mapping[target]
-                    params["srchNcs1"] = mapping.get("ncs1", "")
-                    params["srchNcs2"] = mapping.get("ncs2", "")
-                    logger.info(f"[TrainingAdvisor] NCS 코드 설정: {target} -> {params['srchNcs1']}, {params['srchNcs2']}")
-                
-                # 직업 유의어 처리
-                search_terms = [target]  # 기본 검색어
+                search_terms = [target] # 기본 검색어
                 synonyms = get_job_synonyms(target)
                 if synonyms:
                     search_terms.extend(synonyms)
                 
-                # 검색어 설정
+                # 먼저 과정명으로만 검색 시도
                 params["srchTraProcessNm"] = "|".join(search_terms)
                 logger.info(f"[TrainingAdvisor] 검색어 설정: {params['srchTraProcessNm']}")
+                
+                # 만약 검색 결과가 없을 경우를 대비해 NCS 코드를 백업으로 저장
+                ncs_backup = {}
+                if target in self.interest_ncs_mapping:
+                    mapping = self.interest_ncs_mapping[target]
+                    ncs_backup = {
+                        "srchNcs1": mapping.get("ncs1", ""),
+                        "srchNcs2": mapping.get("ncs2", "")
+                       
+                    }
+                    logger.info(f"[TrainingAdvisor] NCS 코드 설정: {ncs_backup}")
+                
+                # 검색 결과가 없을 경우 NCS 코드로 재시도하는 로직을 search_training_courses에 추가
+                return params, ncs_backup
 
             logger.info(f"[TrainingAdvisor] 최종 검색 파라미터: {params}")
-            return params
+            return params, {}  # ncs_backup을 빈 딕셔너리로 반환
 
         except Exception as e:
             logger.error(f"[TrainingAdvisor] 검색 파라미터 구성 중 오류: {str(e)}")
-            return params
+            return params, {}  # 에러 발생 시에도 기본 파라미터와 빈 ncs_backup 반환
     
     ###############################################################################
     # 훈련과정 데이터 전처리
@@ -248,20 +254,20 @@ class TrainingAdvisorAgent:
             try:
                 cost = int(course.get("courseMan", "0").replace(",", ""))
                 formatted_course = {
-                    "id": course.get("trprId", ""),
-                    "title": course.get("title", ""),
-                    "institute": course.get("subTitle", ""),
-                    "location": course.get("address", ""),
-                    "period": f"{course.get('traStartDate', '')} ~ {course.get('traEndDate', '')}",
-                    "startDate": course.get("traStartDate", ""),
-                    "endDate": course.get("traEndDate", ""),
-                    "cost": f"{cost:,}원",
+                    "id": course.get("TRPR_ID", ""),                  # 훈련과정ID
+                    "title": course.get("TRPR_NM", ""),               # 과정명
+                    "institute": course.get("INST_NM", ""),           # 훈련기관명
+                    "location": course.get("ADDR1", ""),              # 훈련기관 주소
+                    "period": f"{course.get('TRA_START_DATE', '')}~{course.get('TRA_END_DATE', '')}", 
+                    "startDate": course.get("TRA_START_DATE", ""),    # 시작일
+                    "endDate": course.get("TRA_END_DATE", ""),        # 종료일
+                    "cost": course.get("REAL_MAN", "0"),             # 실제 훈련비
                     "cost_value": cost,  # 정렬을 위해 추가
-                    "description": course.get("contents", ""),
-                    "target": course.get("trainTarget", ""),
-                    "yardMan": course.get("yardMan", ""),
-                    "titleLink": course.get("titleLink", ""),
-                    "telNo": course.get("telNo", "")
+                    "description": course.get("TRPR_CHAP", ""),       # 과정 설명
+                    "target": course.get("TRAIN_TARGET", ""),
+                    "yardMan": course.get("YARD_MAN", ""),
+                    "titleLink": course.get("TITLE_LINK", ""),
+                    "telNo": course.get("TEL_NO", "")
                 }
                 formatted_courses.append(formatted_course)
             except Exception as e:
@@ -320,15 +326,19 @@ class TrainingAdvisorAgent:
             logger.info(f"[TrainingAdvisor] NER 정보: {user_ner}")
             
             # 1. 검색 옵션 분석
-            search_options = self._analyze_search_options(query)
+            search_options = self._analyze_search_options(query, chat_history, user_ner)
             logger.info(f"[TrainingAdvisor] 검색 옵션: {search_options}")
             
             # 2. 검색 파라미터 구성
-            search_params = self._build_search_params(user_ner, user_profile)
-            logger.info(f"[TrainingAdvisor] 검색 파라미터: {search_params}")
+            params, ncs_backup = self._build_search_params(user_ner, user_profile)
+            logger.info(f"[TrainingAdvisor] 검색 파라미터: {params}")
         
             # 3. API 호출
-            courses = await self._search_courses(search_params)
+            courses = await self._search_courses(params)
+            if not courses and ncs_backup:  # 결과가 없으면 NCS로 재시도
+                params.pop("srchTraProcessNm", None)
+                params.update(ncs_backup)
+                courses = await self._search_courses(params)
             logger.info(f"[TrainingAdvisor] 검색된 과정 수: {len(courses) if courses else 0}")
             
             # 4. 결과 처리
@@ -353,13 +363,33 @@ class TrainingAdvisorAgent:
                 "trainingCourses": []
             }
 
-    def _analyze_search_options(self, query: str) -> Dict:
+    def _analyze_search_options(self, query: str, chat_history: List[Dict] = None, user_ner: Dict = None) -> Dict:
         """검색 옵션 분석"""
-        return {
+        options = {
             "is_low_cost": any(keyword in query for keyword in ["저렴한", "싼", "무료", "비용", "적은", "낮은"]),
             "is_nearby": any(keyword in query for keyword in ["가까운", "근처", "주변"]),
-            "is_short_term": any(keyword in query for keyword in ["단기", "짧은", "빠른"])
+            "is_short_term": any(keyword in query for keyword in ["단기", "짧은", "빠른"]),
+            "exclude_terms": [],
+            "search_terms": []  # 빈 리스트로 초기화
         }
+        
+        # user_ner에서 직무와 관심분야 가져오기
+        if user_ner:
+            if job := user_ner.get("직무"):
+                options["search_terms"].append(job)
+            if interests := user_ner.get("관심분야"):
+                if isinstance(interests, list):
+                    options["search_terms"].extend(interests)
+                elif isinstance(interests, str):
+                    options["search_terms"].append(interests)
+        
+        # 채팅 히스토리에서 제외 의도 분석
+        if chat_history:
+            last_msg = chat_history[-1].get("content", "")
+            if "제외" in last_msg or "빼고" in last_msg:
+                options["exclude_terms"] = [word for word in last_msg.split() if word not in ["제외", "빼고", "말고", "줘", "해줘"]]
+        
+        return options
 
     async def _search_courses(self, search_params: Dict) -> List[Dict]:
         """API를 통한 과정 검색"""
@@ -400,45 +430,64 @@ class TrainingAdvisorAgent:
             return []
 
     def _process_courses(self, courses: List[Dict], search_options: Dict) -> List[Dict]:
-        """검색 결과 처리"""
+        """검색 결과 처리 및 필터링"""
+        
         try:
             # 1. 응답 데이터 포맷팅
             formatted_courses = []
             for course in courses:
-                formatted_course = {
-                    # API 응답의 실제 필드명으로 수정
-                    "id": course.get("trprId", ""),                    # 훈련과정ID
-                    "title": course.get("title", ""),                  # 과정명
-                    "institute": course.get("subTitle", ""),           # 훈련기관명
-                    "location": course.get("address", ""),             # 훈련기관 주소 - Pydantic 필수 필드
-                    "period": f"{course.get('traStartDate', '')}~{course.get('traEndDate', '')}", 
-                    "startDate": course.get("traStartDate", ""),      # 시작일
-                    "endDate": course.get("traEndDate", ""),          # 종료일
-                    "cost": course.get("realMan", "0"),               # 실제 훈련비
-                    "description": course.get("contents", ""),         # 과정 설명
-                    "target": course.get("trainTarget", ""),          # 훈련대상
-                    "totalCost": course.get("courseMan", "0"),        # 총 훈련비
-                    "yardMan": course.get("yardMan", "0"),           # 정원
-                    "titleLink": course.get("titleLink", ""),         # 과정 상세 링크
-                    "telNo": course.get("telNo", ""),                # 연락처
-                    "address": course.get("address", ""),            # 훈련기관 주소
-                    "ncsCd": course.get("ncsCd", ""),               # NCS 코드
-                    "grade": course.get("grade", ""),               # 등급
-                    "regCourseMan": course.get("regCourseMan", "0"), # 수강신청 인원
-                    "trainingType": course.get("trainTarget", ""),    # 훈련유형
-                    "trainingTarget": course.get("trainTarget", ""),  # 훈련대상
-                    "employmentRate": {                               # 취업률 정보
-                        "threeMonth": course.get("eiEmplRate3", "0"),
-                        "sixMonth": course.get("eiEmplRate6", "0")
+                try:
+                    # 비용 정보 포맷팅 (천 단위 콤마)
+                    real_cost = course.get("realMan", "0")
+                    total_cost = course.get("courseMan", "0")
+                    
+                    # 문자열에서 콤마 제거 후 숫자로 변환
+                    real_cost = int(real_cost.replace(",", ""))
+                    total_cost = int(total_cost.replace(",", ""))
+                    
+                    # 천 단위 콤마 포맷팅
+                    formatted_real_cost = format(real_cost, ",")
+                    formatted_total_cost = format(total_cost, ",")
+                    
+                    formatted_course = {
+                        # API 응답의 실제 필드명으로 수정
+                        "id": course.get("trprId", ""),                    # 훈련과정ID
+                        "title": course.get("title", ""),                  # 과정명
+                        "institute": course.get("subTitle", ""),           # 훈련기관명
+                        "location": course.get("address", ""),             # 훈련기관 주소 - Pydantic 필수 필드
+                        "period": f"{course.get('traStartDate', '')}~{course.get('traEndDate', '')}", 
+                        "startDate": course.get("traStartDate", ""),      # 시작일
+                        "endDate": course.get("traEndDate", ""),          # 종료일
+                        "cost": formatted_real_cost,  # 천 단위 콤마가 적용된 실제 훈련비
+                        "totalCost": formatted_total_cost,  # 천 단위 콤마가 적용된 총 훈련비               # 실제 훈련비
+                        "description": course.get("contents", ""),         # 과정 설명
+                        "target": course.get("trainTarget", ""),          # 훈련대상
+                        "totalCost": course.get("courseMan", "0"),        # 총 훈련비
+                        "yardMan": course.get("yardMan", "0"),           # 정원
+                        "titleLink": course.get("titleLink", ""),         # 과정 상세 링크
+                        "telNo": course.get("telNo", ""),                # 연락처
+                        "address": course.get("address", ""),            # 훈련기관 주소
+                        "ncsCd": course.get("ncsCd", ""),               # NCS 코드
+                        "grade": course.get("grade", ""),               # 등급
+                        "regCourseMan": course.get("regCourseMan", "0"), # 수강신청 인원
+                        "trainingType": course.get("trainTarget", ""),    # 훈련유형
+                        "trainingTarget": course.get("trainTarget", ""),  # 훈련대상
+                        "employmentRate": {                               # 취업률 정보
+                            "threeMonth": course.get("eiEmplRate3", "0"),
+                            "sixMonth": course.get("eiEmplRate6", "0")
+                        }
                     }
-                }
 
-                # 필수 필드 검증 - title과 location이 있는 경우만 추가
-                if formatted_course["title"] and formatted_course["location"]:
-                    formatted_courses.append(formatted_course)
-                else:
-                    logger.warning(f"[TrainingAdvisor] 필수 필드 누락된 과정 제외: title={formatted_course['title']}, location={formatted_course['location']}")
-
+                    # 필수 필드 검증 - title과 location이 있는 경우만 추가
+                    if formatted_course["title"] and formatted_course["location"]:
+                        formatted_courses.append(formatted_course)
+                    else:
+                        logger.warning(f"[TrainingAdvisor] 필수 필드 누락된 과정 제외: title={formatted_course['title']}, location={formatted_course['location']}")
+                        
+                except ValueError as e:
+                    logger.error(f"비용 포맷팅 중 오류: {str(e)}")
+                    continue
+                
             logger.info(f"[TrainingAdvisor] 포맷팅된 과정 수: {len(formatted_courses)}")
             
             # 2. 중복 제거
@@ -480,6 +529,31 @@ class TrainingAdvisorAgent:
 
     def _filter_and_sort_courses(self, courses: List[Dict], search_options: Dict) -> List[Dict]:
         """과정 필터링 및 정렬"""
-        if search_options["is_low_cost"]:
-            courses.sort(key=lambda x: int(x.get("cost", "0").replace(",", "")))
-        return courses
+        filtered_courses = courses[:]
+        
+        # 1. 직무/관심분야 기반 필터링
+        if search_terms := search_options.get("search_terms", []):
+            filtered_courses = [
+                course for course in filtered_courses
+                if any(
+                    term.lower() in course.get("title", "").lower() or  # 제목에서 검색
+                    term.lower() in course.get("description", "").lower() or  # 설명에서 검색
+                    term.lower() in course.get("institute", "").lower() or  # 교육기관에서 검색
+                    term.lower() in course.get("target", "").lower()  # 교육대상에서 검색
+                    for term in search_terms
+                )
+            ]
+            
+            logger.info(f"[TrainingAdvisor] 검색어 '{search_terms}'로 필터링된 과정 수: {len(filtered_courses)}")
+        
+        # 2. 비용순 정렬
+        if search_options.get("is_low_cost"):
+            filtered_courses.sort(key=lambda x: int(x.get("cost", "0").replace(",", "")))
+            logger.info("[TrainingAdvisor] 비용순으로 정렬됨")
+        
+        # 3. 결과가 없는 경우 원본 데이터 반환
+        if not filtered_courses and courses:
+            logger.warning("[TrainingAdvisor] 필터링 결과가 없어 전체 과정을 반환합니다")
+            return courses[:5]  # 상위 5개만 반환
+        
+        return filtered_courses
