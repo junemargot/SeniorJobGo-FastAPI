@@ -145,7 +145,7 @@ class TrainingAdvisorAgent:
                 "pageSize": "100",                      # 필수: 페이지당 출력건수
                 "srchTraStDt": today.strftime("%Y%m%d"),  # 오늘부터
                 "srchTraEndDt": half_year_later.strftime("%Y%m%d"),  # 6개월 후까지
-                "sort": "DESC",                        # 필수: 정렬방법
+                "sort": "ASC",                        # 필수: 정렬방법
                 "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼
                 
                 # 검색 조건
@@ -234,11 +234,11 @@ class TrainingAdvisorAgent:
                 return params, ncs_backup
 
             logger.info(f"[TrainingAdvisor] 최종 검색 파라미터: {params}")
-            return params
+            return params, {}  # ncs_backup을 빈 딕셔너리로 반환
 
         except Exception as e:
             logger.error(f"[TrainingAdvisor] 검색 파라미터 구성 중 오류: {str(e)}")
-            return params
+            return params, {}  # 에러 발생 시에도 기본 파라미터와 빈 ncs_backup 반환
     
     ###############################################################################
     # 훈련과정 데이터 전처리

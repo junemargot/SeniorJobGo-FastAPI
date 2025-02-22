@@ -86,7 +86,7 @@ class TrainingCollector:
         
         # 현재 날짜 기준으로 3개월 기간 설정
         today = datetime.now()
-        three_months_later = today + timedelta(days=90)
+        half_year_later = today + timedelta(days=180)
         
         # 기본 파라미터 설정 (공식 API 문서 기준)
         default_params = {
@@ -96,8 +96,8 @@ class TrainingCollector:
             "pageNum": "1",                        # 필수: 시작페이지 (최대 1000)
             "pageSize": "100",                     # 필수: 페이지당 출력건수 (최대 100)
             "srchTraStDt": today.strftime("%Y%m%d"),           # 필수: 훈련시작일 From
-            "srchTraEndDt": three_months_later.strftime("%Y%m%d"), # 필수: 훈련시작일 To
-            "sort": "DESC",                        # 필수: 정렬방법 (ASC/DESC)
+            "srchTraEndDt": half_year_later.strftime("%Y%m%d"), # 필수: 훈련시작일 To
+            "sort": "ASC",                        # 필수: 정렬방법 (ASC/DESC)
             "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼 (TRNG_BGDE: 훈련시작일)
             
             # 선택적 파라미터
