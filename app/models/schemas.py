@@ -53,7 +53,9 @@ class MealPosting(BaseModel):
     phone: str
     operatingHours: str
     targetGroup: str
-    description: str 
+    description: str
+    latitude: float = 0.0  # 위도 필드 추가
+    longitude: float = 0.0  # 경도 필드 추가
 
 class ChatResponse(BaseModel):
     type: str  # 'list' 또는 'detail'

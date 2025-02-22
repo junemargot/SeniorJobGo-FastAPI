@@ -16,6 +16,9 @@ import json
 import time
 from typing import List, Dict
 from datetime import datetime
+from app.agents.meal_agent import MealAgent
+from app.services.meal_data_client import PublicDataClient
+
 
 logger = logging.getLogger(__name__)
 
@@ -405,4 +408,39 @@ async def search_policies(request: ChatRequest):
             policyPostings=[],
             mealPostings=[],
             user_profile=request.user_profile or {}
+        )
+    
+
+# meals
+@router.post("/meals/search", response_model=ChatResponse)
+async def search_meals(request: Request, chat_request: ChatRequest):
+    try:
+        # MealAgent 인스턴스 생성
+        meal_agent = MealAgent(data_client=PublicDataClient(), llm=request.app.state.llm)
+        
+        logger.info(f"[MealSearch] 무료급식소 검색 요청: {chat_request.user_message}")
+        result = await meal_agent.query_meal_agent(chat_request.user_message)
+        logger.info(f"[MealSearch] 검색 결과: {result}")
+        
+        # ChatResponse 형식으로 변환
+        return ChatResponse(
+            message=result.get("message", ""),
+            type="meal",
+            jobPostings=[],
+            trainingCourses=[],
+            policyPostings=[],
+            mealPostings=result.get("mealPostings", []),
+            user_profile=chat_request.user_profile or {}
+        )
+        
+    except Exception as e:
+        logger.error(f"[MealSearch] 오류 발생: {str(e)}")
+        return ChatResponse(
+            message="무료급식소 검색 중 오류가 발생했습니다.",
+            type="error",
+            jobPostings=[],
+            trainingCourses=[],
+            policyPostings=[],
+            mealPostings=[],
+            user_profile=chat_request.user_profile or {}
         )

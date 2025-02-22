@@ -420,7 +420,9 @@ async def meal_agent_tool_func(input_str: str) -> str:
                 "phone": service.get("phoneNumber", ""),
                 "operatingHours": service.get("mlsvTime", ""),
                 "targetGroup": service.get("mlsvTrget", ""),
-                "description": service.get("mlsvDate", "")
+                "description": service.get("mlsvDate", ""),
+                "latitude": service.get("latitude", 0.0),
+                "longitude": service.get("longitude", 0.0)
             })
 
         # 사용자 친화적인 메시지 생성

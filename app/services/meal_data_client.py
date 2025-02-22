@@ -60,7 +60,9 @@ class PublicDataClient:
             "mlsvPlace":         item.get("mlsvPlace", ""),           # 급식장소   
             "mlsvTrget":         item.get("mlsvTrget", ""),           # 급식대상 
             "mlsvTime":          item.get("mlsvTime", ""),            # 급식시간
-            "mlsvDate":          item.get("mlsvDate", "")             # 급식일자
+            "mlsvDate":          item.get("mlsvDate", ""),            # 급식일자
+            "latitude":          float(item.get("latitude", "0.0") or "0.0"),    # 위도
+            "longitude":         float(item.get("longitude", "0.0") or "0.0")    # 경도
           }
           all_records.append(normalized)
       
