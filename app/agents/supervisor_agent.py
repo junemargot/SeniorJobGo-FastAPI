@@ -421,14 +421,16 @@ async def meal_agent_tool_func(input_str: str) -> str:
                 "operatingHours": service.get("mlsvTime", ""),
                 "targetGroup": service.get("mlsvTrget", ""),
                 "description": service.get("mlsvDate", ""),
-                "latitude": service.get("latitude", 0.0),
-                "longitude": service.get("longitude", 0.0)
+                "latitude": float(service.get("latitude", "0.0") or "0.0"),    # 안전한 형변환
+                "longitude": float(service.get("longitude", "0.0") or "0.0")   # 안전한 형변환
             })
 
         # 사용자 친화적인 메시지 생성
         if meal_services:
             message = f"{region or '전국'}의 무료급식소 {len(meal_services)}곳을 찾았습니다"
-            
+        else:
+            message = f"{region or '전국'}에서 무료급식소를 찾을 수 없습니다"
+
         return json.dumps({
             "message": message,
             "type": "meal",
