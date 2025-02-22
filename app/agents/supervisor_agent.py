@@ -60,14 +60,14 @@ def build_supervisor_agent() -> AgentExecutor:
 
     # ReAct 프롬프트 템플릿
     react_template = """당신은 고령자를 위한 채용/교육/무료급식 상담 시스템의 관리자입니다.
-사용자의 질문을 분석하여 필요한 도구를 사용해 정보를 얻고, 최종 답변을 생성하세요.
+사용자의 질문을 분석하여 필요한 도구들을 순차적으로 사용해 정보를 얻고, 종합적인 답변을 생성하세요.
 
 사용자 입력: {input}
 
 사용 가능한 도구들:
 {tools}
 
-You can call the tool using exactly this format:
+You can call multiple tools using exactly this format:
 Action: {tool_names}
 Action Input: 입력은 반드시 아래 형식의 JSON으로 작성하세요
 {{
@@ -82,7 +82,10 @@ Thought: {agent_scratchpad}
 
 규칙:
 1. 입력된 JSON에서 query, user_profile, user_ner 정보를 모두 활용하여 판단하세요.
-2. Action Input은 반드시 모든 정보를 포함한 JSON 형식으로 작성하세요.
+2. 도구는 한 번에 하나씩만 호출하세요
+3. 여러 정보가 필요한 경우 도구를 순차적으로 호출하세요
+4. 각 도구의 결과를 모아서 최종 답변을 생성하세요
+5. Action Input은 반드시 JSON 형식으로 작성하세요
 """
 
     # PromptTemplate으로 변환
@@ -101,7 +104,7 @@ Thought: {agent_scratchpad}
         agent=react_agent,
         tools=tools,
         handle_parsing_errors=True,
-        max_iterations=1,  # 반복 횟수 더 제한
+        max_iterations=2,  # 반복 횟수 더 제한
         max_execution_time=None,  # 시간 제한 제거
         early_stopping_method="force",  # generate -> force로 변경
         return_intermediate_steps=True,  # 중간 단계 결과 반환

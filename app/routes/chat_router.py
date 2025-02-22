@@ -183,10 +183,10 @@ async def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
                 "timestamp": datetime.now(),
                 "type": response.type,
                 "metadata": {
-                    "jobPostings": len(response.jobPostings),
-                    "trainingCourses": len(response.trainingCourses),
-                    "policyPostings": len(response.policyPostings),
-                    "mealPostings": len(response.mealPostings)
+                    "jobPostings": response.jobPostings,
+                    "trainingCourses": response.trainingCourses,
+                    "policyPostings": response.policyPostings,
+                    "mealPostings": response.mealPostings
                 }
             }
             await save_chat_message(user["_id"], bot_message)
