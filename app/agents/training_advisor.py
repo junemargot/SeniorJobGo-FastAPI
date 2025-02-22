@@ -133,9 +133,9 @@ class TrainingAdvisorAgent:
             logger.info(f"[TrainingAdvisor] 사용자 NER: {user_ner}")
             logger.info(f"[TrainingAdvisor] 사용자 프로필: {user_profile}")
             
-            # 오늘부터 2개월 내 시작하는 과정 검색
+            # 오늘부터 3개월 내 시작하는 과정 검색
             today = datetime.now()
-            # two_months_later = today + timedelta(days=60)
+            three_months_later = today + timedelta(days=90)
             
             # Work24 API 필수 파라미터
             params = {
@@ -143,8 +143,8 @@ class TrainingAdvisorAgent:
                 "outType": "1",                        # 필수: 출력형태 (1:리스트)
                 "pageNum": "1",                        # 필수: 시작페이지
                 "pageSize": "100",                      # 필수: 페이지당 출력건수
-                "srchTraStDt": (today + timedelta(days=30)).strftime("%Y%m%d"),  # 1달 후부터
-                "srchTraEndDt": "",
+                "srchTraStDt": today.strftime("%Y%m%d"),  # 오늘부터
+                "srchTraEndDt": three_months_later.strftime("%Y%m%d"),  # 3개월 후까지
                 "sort": "DESC",                        # 필수: 정렬방법
                 "sortCol": "TRNG_BGDE",               # 필수: 정렬컬럼
                 
