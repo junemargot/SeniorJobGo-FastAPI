@@ -15,11 +15,12 @@ class JobSearchRequest(BaseModel):
     location: Optional[str] = None  # 지역 (예: "서울 강남구")
     jobType: Optional[str] = None   # 직종
     age: Optional[str] = None       # 연령
+    gender: Optional[str] = None   # 성별
     city: Optional[str] = None      # 시/도
     district: Optional[str] = None  # 구/군
-    workType: Optional[str] = None  # 근무형태
     education: Optional[str] = None # 학력
     career: Optional[str] = None    # 경력
+    workType: Optional[str] = None  # 근무형태
     salary: Optional[str] = None    # 급여
 
 def get_job_advisor(request: Request):
@@ -47,6 +48,7 @@ async def search_jobs(
             "location": location,
             "jobType": search_params.jobType,
             "age": search_params.age,
+            "gender": search_params.gender,
             "workType": search_params.workType,
             "education": search_params.education,
             "career": search_params.career,
@@ -57,7 +59,12 @@ async def search_jobs(
         user_ner = {
             "지역": location,
             "직무": search_params.jobType,
-            "연령대": search_params.age
+            "연령대": search_params.age,
+            "성별": search_params.gender,
+            "근무형태": search_params.workType,
+            "학력": search_params.education,
+            "경력": search_params.career,
+            "급여": search_params.salary
         }
 
         # 검색 쿼리 구성
@@ -66,10 +73,12 @@ async def search_jobs(
             search_query += f"지역: {location}, "
         if search_params.jobType:
             search_query += f"직종: {search_params.jobType}, "
-        if search_params.workType:
-            search_query += f"근무형태: {search_params.workType}, "
         if search_params.career:
             search_query += f"경력: {search_params.career}, "
+        if search_params.salary:
+            search_query += f"급여: {search_params.salary}, "
+        if search_params.education:
+            search_query += f"성별: {search_params.gender}, "
 
         # 채용정보 검색 실행
         result = await job_advisor.search_jobs(
