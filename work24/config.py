@@ -16,7 +16,7 @@ WORK24_COMMON_URL = os.getenv("WORK24_COMMON_URL")
 TRAINING_APIS = {
     "training_common": {
         "name": "공통코드",
-        "api_key": os.getenv("WORK24_TRAINING_COMMON_API_KEY"),
+        "api_key": os.getenv("WORK24_COMMON_API_KEY"),
         "endpoints": {
             "common": os.getenv("WORK24_TRAINING_COMMON_URL")
         }
