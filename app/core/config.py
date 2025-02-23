@@ -10,6 +10,7 @@ class Settings:
     DATA_API_KEY: str = os.getenv("DATA_API_KEY")
     DATA_DECODING_KEY: str = os.getenv("DATA_DECODING_KEY")
     DATA_URL: str = os.getenv("DATA_URL")
+    GOV24_API_KEY: str = os.getenv("GOV24_API_KEY")
     ALLOWED_ORIGINS: list = [
         "http://localhost:3000",  # React 기본 개발 서버
         "http://localhost:5173",  # Vite 개발 서버
