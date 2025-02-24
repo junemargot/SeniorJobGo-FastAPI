@@ -5,7 +5,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.server_api import ServerApi
 from .console_colors import INFO, ERROR
-
+import os
 client = None
 db = None
 
@@ -13,8 +13,8 @@ db = None
 def connect_db() -> bool:
     print(f"{INFO}MongoDB Connection Start")
     try:
-        MONGO_URI = "mongodb://localhost:27017"  # 로컬 MongoDB URI
-        DATABASE_NAME = "seniorjobgo"  # 사용할 데이터베이스 이름
+        MONGO_URI = os.getenv("MONGO_URI")
+        DATABASE_NAME = os.getenv("DATABASE_NAME")
 
         global client, db  # 전역 변수로 client와 db를 사용
 
