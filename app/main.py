@@ -47,18 +47,17 @@ async def lifespan(app: FastAPI):
         
         # LLM과 에이전트 초기화
         logger.info("LLM과 에이전트를 초기화합니다.")
-        llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
+        app.state.llm = ChatOpenAI(
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.5,
             request_timeout=30
         )
-        app.state.llm = llm  # 앱 상태에 저장
         
         # 에이전트 초기화
-        app.state.supervisor = SupervisorAgent(llm)
-        app.state.job_advisor = JobAdvisorAgent(llm, vector_search)
-        app.state.training_advisor = TrainingAdvisorAgent(llm)
-        app.state.chat_agent = ChatAgent(llm)  # ChatAgent 추가
+        app.state.supervisor = SupervisorAgent(app.state.llm)
+        app.state.job_advisor = JobAdvisorAgent(app.state.llm, vector_search)
+        app.state.training_advisor = TrainingAdvisorAgent(app.state.llm)
+        app.state.chat_agent = ChatAgent(app.state.llm)  # ChatAgent 추가
 
         logger.info("LLM과 에이전트 초기화 완료")
 

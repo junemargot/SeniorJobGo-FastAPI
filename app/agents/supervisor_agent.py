@@ -10,6 +10,7 @@ from app.models.flow_state import FlowState
 import json
 from app.agents.policy_agent import query_policy_agent
 from app.services.meal_data_client import PublicDataClient
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,10 @@ def build_supervisor_agent() -> AgentExecutor:
     """SupervisorAgent(ReAct) 생성"""
     
     # LLM 설정
-    llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.5)
+    llm = ChatOpenAI(
+        model_name=settings.OPENAI_MODEL_NAME,
+        temperature=0.5
+    )
     
     # 사용할 Tool 정의
     tools: List[BaseTool] = [

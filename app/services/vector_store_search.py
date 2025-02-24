@@ -9,6 +9,7 @@ from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class VectorStoreSearch:
         """
         self.vectorstore = vectorstore
         self.llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.0
         )
 
@@ -70,7 +71,7 @@ class VectorStoreSearch:
 
         llm = ChatOpenAI(
             openai_api_key=openai_api_key,
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.3
         )
 
@@ -148,7 +149,7 @@ class VectorStoreSearch:
 
         llm = ChatOpenAI(
             openai_api_key=openai_api_key,
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.0
         )
         prompt_text = (
