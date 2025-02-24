@@ -32,10 +32,6 @@ async def summarize_chat_history(chat_history: str) -> str:
     response = await llm.ainvoke(summary_prompt.format(chat_history=chat_history))
     return response.content
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10)
-)
 async def process_tool_output_node(state: FlowState):
     """Tool 실행 결과를 처리하고 최종 검증하는 노드"""
     try:
@@ -100,6 +96,8 @@ async def process_tool_output_node(state: FlowState):
 )
         # 대화 이력 요약
         summarized_history = await summarize_chat_history(state.chat_history)
+
+        logger.info(f"[ProcessToolOutput] 요약된 이력: {summarized_history}")
         # response 변수 초기화
         response = None
         
@@ -107,9 +105,8 @@ async def process_tool_output_node(state: FlowState):
             # 검증 실행
             response = await llm.ainvoke(
                 verify_prompt.format(
-                    chat_history=summarized_history,  # 요약된 이력 사용
+                    chat_history=summarized_history,  # 요약된 이력만 사용
                     query=state.query,
-                    chat_history=state.chat_history,
                     agent_response=state.final_response.get("message", ""),
                     job_count=len(state.jobPostings),
                     training_count=len(state.trainingCourses),
