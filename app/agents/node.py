@@ -20,6 +20,7 @@ async def process_tool_output_node(state: FlowState):
 당신은 고령자를 위한 채용/교육/무료급식 상담 담당입니다. 아래의 입력 데이터를 바탕으로 사용자의 질문과 에이전트의 응답을 면밀히 검토하여, 적절한 최종 답변을 생성해주세요.
 
 입력 데이터  
+- 이전 대화 내용: {chat_history}
 - 사용자 질문: {query}  
 - 에이전트 응답: {agent_response}  
 - 응답 내 포함된 정보:  
@@ -38,6 +39,7 @@ async def process_tool_output_node(state: FlowState):
 2. 추가 설명이나 보충 조치가 필요하다면, 추가 검색 또는 다른 방법을 제안합니다
 3. 채용정보, 훈련과정, 정책정보, 급식정보가 없다면, 없는 정보는 절대 언급하지 않습니다
 4. 정보 안내는 채용정보, 훈련과정, 정책정보, 급식정보의 각 상위 5건만 언급하는 것으로 안내합니다
+5. 리스트 형식으로는 절대 언급하지 않습니다
 
 주요 제공 기능  
 - 경력/경험 기반 맞춤형 일자리 추천  
@@ -62,21 +64,26 @@ async def process_tool_output_node(state: FlowState):
 """
 )
 
-        # 검증 실행
-        response = await llm.ainvoke(
-            verify_prompt.format(
-                query=state.query,
-                agent_response=state.final_response.get("message", ""),
-                job_count=len(state.jobPostings),
-                training_count=len(state.trainingCourses),
-                policy_count=len(state.policyPostings),
-                meal_count=len(state.mealPostings)
+        # response 변수 초기화
+        response = None
+        
+        if not state.final_response.get("type") == "chat":
+            # 검증 실행
+            response = await llm.ainvoke(
+                verify_prompt.format(
+                    query=state.query,
+                    chat_history=state.chat_history,
+                    agent_response=state.final_response.get("message", ""),
+                    job_count=len(state.jobPostings),
+                    training_count=len(state.trainingCourses),
+                    policy_count=len(state.policyPostings),
+                    meal_count=len(state.mealPostings)
+                )
             )
-        )
 
         # 검증된 응답으로 업데이트
         state.final_response = {
-            "message": response.content,
+            "message": response.content if response else state.final_response.get("message", ""),
             "type": state.final_response.get("type", "chat"),
             "jobPostings": state.jobPostings,
             "trainingCourses": state.trainingCourses,
