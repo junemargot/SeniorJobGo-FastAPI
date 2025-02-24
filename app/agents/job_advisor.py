@@ -104,11 +104,11 @@ class JobAdvisorAgent:
                         "workingHours": doc.metadata.get("근무시간", ""),
                         "description": doc.page_content,
                         "phoneNumber": doc.metadata.get("전화번호", ""),
-                        "deadline": doc.metadata.get("마감일자", ""),
+                        "deadline": doc.metadata.get("접수마감일", ""),
                         "requiredDocs": doc.metadata.get("제출서류", ""),
                         "hiringProcess": doc.metadata.get("전형방법", ""),
-                        "insurance": doc.metadata.get("4대보험", ""),
-                        "jobCategory": doc.metadata.get("직종", ""),
+                        "insurance": doc.metadata.get("사회보험", ""),
+                        "jobCategory": doc.metadata.get("모집직종", ""),
                         "jobKeywords": doc.metadata.get("직무", ""),
                         "posting_url": doc.metadata.get("채용공고URL", "")
                     }
