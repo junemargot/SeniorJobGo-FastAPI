@@ -3,8 +3,34 @@ import json
 from langchain_openai import ChatOpenAI
 from app.models.flow_state import FlowState
 from langchain.prompts import PromptTemplate
+from asyncio import TimeoutError
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
+
+async def summarize_chat_history(chat_history: str) -> str:
+    """대화 이력을 핵심 내용만 요약"""
+    if not chat_history:
+        return ""
+        
+    llm = ChatOpenAI(
+        model_name="gpt-4o-mini",
+        temperature=0.3,  # 정확도 위주로 조정
+        max_tokens=150    # 요약 길이 제한
+    )
+    
+    summary_prompt = """
+    다음 대화 이력에서 사용자의 핵심 요구사항과 중요 정보만 추출해주세요:
+    {chat_history}
+    
+    핵심 정보:
+    - 사용자 기본 정보(나이, 경력 등)
+    - 주요 요청사항
+    - 선호 조건(지역, 직종 등)
+    """
+    
+    response = await llm.ainvoke(summary_prompt.format(chat_history=chat_history))
+    return response.content
 
 async def process_tool_output_node(state: FlowState):
     """Tool 실행 결과를 처리하고 최종 검증하는 노드"""
@@ -13,7 +39,12 @@ async def process_tool_output_node(state: FlowState):
             raise ValueError("final_response가 없음")
             
         # 검증용 LLM 초기화
-        llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.5)
+        llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.4,      # 0.3~0.7 범위 내 조정
+            max_tokens=500,       # 적절한 토큰 제한
+            request_timeout=20,   # 타임아웃 설정
+        )
         
         # 검증 프롬프트
         verify_prompt = PromptTemplate.from_template("""
@@ -35,11 +66,12 @@ async def process_tool_output_node(state: FlowState):
 3. 추가 설명이 필요한 부분은 무엇인가?  
 
 출력 형식  
-1. 사용자가 요청한 정보가 있다면, 해당 정보를 우선적으로 안내합니다
-2. 추가 설명이나 보충 조치가 필요하다면, 추가 검색 또는 다른 방법을 제안합니다
-3. 채용정보, 훈련과정, 정책정보, 급식정보가 없다면, 없는 정보는 절대 언급하지 않습니다
-4. 정보 안내는 채용정보, 훈련과정, 정책정보, 급식정보의 각 상위 5건만 언급하는 것으로 안내합니다
-5. 리스트 형식으로는 절대 언급하지 않습니다
+1. 이전 대화는 참고용으로 사용하되, 최종 답변에는 포함하지 않습니다
+2. 사용자가 요청한 정보가 있다면, 해당 정보를 우선적으로 안내합니다
+3. 추가 설명이나 보충 조치가 필요하다면, 추가 검색 또는 다른 방법을 제안합니다
+4. 채용정보, 훈련과정, 정책정보, 급식정보가 없다면, 없는 정보는 절대 언급하지 않습니다
+5. 정보 안내는 채용정보, 훈련과정, 정책정보, 급식정보의 각 상위 5건만 언급하는 것으로 안내합니다
+6. 리스트 형식으로는 절대 언급하지 않습니다
 
 주요 제공 기능  
 - 경력/경험 기반 맞춤형 일자리 추천  
@@ -63,7 +95,10 @@ async def process_tool_output_node(state: FlowState):
 위의 지침에 따라 최종 답변을 작성해주세요.
 """
 )
+        # 대화 이력 요약
+        summarized_history = await summarize_chat_history(state.chat_history)
 
+        logger.info(f"[ProcessToolOutput] 요약된 이력: {summarized_history}")
         # response 변수 초기화
         response = None
         
@@ -71,8 +106,8 @@ async def process_tool_output_node(state: FlowState):
             # 검증 실행
             response = await llm.ainvoke(
                 verify_prompt.format(
+                    chat_history=summarized_history,  # 요약된 이력만 사용
                     query=state.query,
-                    chat_history=state.chat_history,
                     agent_response=state.final_response.get("message", ""),
                     job_count=len(state.jobPostings),
                     training_count=len(state.trainingCourses),
@@ -95,6 +130,10 @@ async def process_tool_output_node(state: FlowState):
         logger.info(f"[ProcessToolOutput] 최종 응답: {state.final_response}")
         return state
 
+    except TimeoutError:
+        logger.warning("[ProcessToolOutput] 타임아웃 발생, 재시도")
+        raise
+        
     except Exception as e:
         logger.error(f"[ProcessToolOutput] 오류: {str(e)}", exc_info=True)
         state.error_message = str(e)
