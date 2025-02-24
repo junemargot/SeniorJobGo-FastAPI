@@ -85,14 +85,18 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱 생성 시 lifespan 설정
 app = FastAPI(lifespan=lifespan)
 
-# CORS 설정
+# CORS 미들웨어를 다른 미들웨어보다 먼저 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
+    expose_headers=["*"],
+    max_age=600,  # 프리플라이트 요청 캐시 시간 (초)
 )
+
+# 나머지 라우터 등록
 app.include_router(userInform_router.router)
 app.include_router(training_router.router)
 
