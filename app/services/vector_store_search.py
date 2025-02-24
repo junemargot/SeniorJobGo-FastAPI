@@ -56,7 +56,7 @@ class VectorStoreSearch:
             if user_val and doc_val:
                 if user_val in doc_val or doc_val in user_val:
 
-                    score += 1.0
+                    score += 5.0
         return score
 
     def _llm_rerank(self, docs: List[Document], user_ner: dict) -> List[Document]:
@@ -120,8 +120,8 @@ class VectorStoreSearch:
             logger.warning(f"LLM rerank parse fail: {ex}")
             llm_scores = [0]*len(docs)
 
-        weight_llm = 0.7
-        weight_manual = 0.3
+        weight_llm = 0.5
+        weight_manual = 0.6
 
         weighted_scores = []
         for i, doc in enumerate(docs):
