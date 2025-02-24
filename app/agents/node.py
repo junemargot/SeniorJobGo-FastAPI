@@ -3,9 +3,39 @@ import json
 from langchain_openai import ChatOpenAI
 from app.models.flow_state import FlowState
 from langchain.prompts import PromptTemplate
+from asyncio import TimeoutError
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
+async def summarize_chat_history(chat_history: str) -> str:
+    """대화 이력을 핵심 내용만 요약"""
+    if not chat_history:
+        return ""
+        
+    llm = ChatOpenAI(
+        model_name="gpt-4o-mini",
+        temperature=0.3,  # 정확도 위주로 조정
+        max_tokens=150    # 요약 길이 제한
+    )
+    
+    summary_prompt = """
+    다음 대화 이력에서 사용자의 핵심 요구사항과 중요 정보만 추출해주세요:
+    {chat_history}
+    
+    핵심 정보:
+    - 사용자 기본 정보(나이, 경력 등)
+    - 주요 요청사항
+    - 선호 조건(지역, 직종 등)
+    """
+    
+    response = await llm.ainvoke(summary_prompt.format(chat_history=chat_history))
+    return response.content
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10)
+)
 async def process_tool_output_node(state: FlowState):
     """Tool 실행 결과를 처리하고 최종 검증하는 노드"""
     try:
@@ -13,7 +43,12 @@ async def process_tool_output_node(state: FlowState):
             raise ValueError("final_response가 없음")
             
         # 검증용 LLM 초기화
-        llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.5)
+        llm = ChatOpenAI(
+            model_name="gpt-4o-mini",
+            temperature=0.4,      # 0.3~0.7 범위 내 조정
+            max_tokens=500,       # 적절한 토큰 제한
+            request_timeout=20,   # 타임아웃 설정
+        )
         
         # 검증 프롬프트
         verify_prompt = PromptTemplate.from_template("""
@@ -63,7 +98,8 @@ async def process_tool_output_node(state: FlowState):
 위의 지침에 따라 최종 답변을 작성해주세요.
 """
 )
-
+        # 대화 이력 요약
+        summarized_history = await summarize_chat_history(state.chat_history)
         # response 변수 초기화
         response = None
         
@@ -71,6 +107,7 @@ async def process_tool_output_node(state: FlowState):
             # 검증 실행
             response = await llm.ainvoke(
                 verify_prompt.format(
+                    chat_history=summarized_history,  # 요약된 이력 사용
                     query=state.query,
                     chat_history=state.chat_history,
                     agent_response=state.final_response.get("message", ""),
@@ -95,6 +132,10 @@ async def process_tool_output_node(state: FlowState):
         logger.info(f"[ProcessToolOutput] 최종 응답: {state.final_response}")
         return state
 
+    except TimeoutError:
+        logger.warning("[ProcessToolOutput] 타임아웃 발생, 재시도")
+        raise
+        
     except Exception as e:
         logger.error(f"[ProcessToolOutput] 오류: {str(e)}", exc_info=True)
         state.error_message = str(e)
