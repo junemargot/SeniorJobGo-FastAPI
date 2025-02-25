@@ -45,10 +45,9 @@ class Settings(BaseSettings):
     
     # API 기본 URL - 환경에 따라 다르게 설정
     API_BASE_URL: str = (
-        # f"http://{SERVER_HOST}:{SERVER_PORT}/api/{API_VERSION}"
-        f"*"
-        # if ENV == "production"
-        # else f"http://localhost:{SERVER_PORT}/api/{API_VERSION}"
+        f"http://{SERVER_HOST}:{SERVER_PORT}/api/{API_VERSION}"
+        if ENV == "production"
+        else f"http://localhost:{SERVER_PORT}/api/{API_VERSION}"
     )
     
     # OpenAI 설정
