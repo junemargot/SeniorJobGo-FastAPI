@@ -30,7 +30,10 @@ def process_tool_output_node(state: FlowState):
         # state 업데이트
         state.final_response = response
         return state
-
+    except TimeoutError:
+        logger.warning("[ProcessToolOutput] 타임아웃 발생, 재시도")
+        raise
+        
     except Exception as e:
         logger.error(f"[ProcessToolOutput] 오류: {str(e)}", exc_info=True)
         state.error_message = str(e)

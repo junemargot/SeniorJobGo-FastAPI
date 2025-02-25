@@ -9,6 +9,7 @@ from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.schema.runnable import Runnable
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class VectorStoreSearch:
         """
         self.vectorstore = vectorstore
         self.llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.0
         )
 
@@ -56,7 +57,7 @@ class VectorStoreSearch:
             if user_val and doc_val:
                 if user_val in doc_val or doc_val in user_val:
 
-                    score += 1.0
+                    score += 5.0
         return score
 
     def _llm_rerank(self, docs: List[Document], user_ner: dict) -> List[Document]:
@@ -70,7 +71,7 @@ class VectorStoreSearch:
 
         llm = ChatOpenAI(
             openai_api_key=openai_api_key,
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.3
         )
 
@@ -120,8 +121,8 @@ class VectorStoreSearch:
             logger.warning(f"LLM rerank parse fail: {ex}")
             llm_scores = [0]*len(docs)
 
-        weight_llm = 0.7
-        weight_manual = 0.3
+        weight_llm = 0.5
+        weight_manual = 0.6
 
         weighted_scores = []
         for i, doc in enumerate(docs):
@@ -148,7 +149,7 @@ class VectorStoreSearch:
 
         llm = ChatOpenAI(
             openai_api_key=openai_api_key,
-            model_name="gpt-4o-mini",
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.0
         )
         prompt_text = (

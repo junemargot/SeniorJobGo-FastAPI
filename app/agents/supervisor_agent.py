@@ -10,6 +10,7 @@ from app.models.flow_state import FlowState
 import json
 from app.agents.policy_agent import query_policy_agent
 from app.services.meal_data_client import PublicDataClient
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,10 @@ def build_supervisor_agent() -> AgentExecutor:
     """SupervisorAgent(ReAct) 생성"""
     
     # LLM 설정
-    llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.5)
+    llm = ChatOpenAI(
+        model_name=settings.OPENAI_MODEL_NAME,
+        temperature=0.5
+    )
     
     # 사용할 Tool 정의
     tools: List[BaseTool] = [
@@ -60,14 +64,14 @@ def build_supervisor_agent() -> AgentExecutor:
 
     # ReAct 프롬프트 템플릿
     react_template = """당신은 고령자를 위한 채용/교육/무료급식 상담 시스템의 관리자입니다.
-사용자의 질문을 분석하여 필요한 도구를 사용해 정보를 얻고, 최종 답변을 생성하세요.
+사용자의 질문을 분석하여 필요한 도구들을 순차적으로 사용해 정보를 얻고, 종합적인 답변을 생성하세요.
 
 사용자 입력: {input}
 
 사용 가능한 도구들:
 {tools}
 
-You can call the tool using exactly this format:
+You can call multiple tools using exactly this format:
 Action: {tool_names}
 Action Input: 입력은 반드시 아래 형식의 JSON으로 작성하세요
 {{
@@ -82,7 +86,10 @@ Thought: {agent_scratchpad}
 
 규칙:
 1. 입력된 JSON에서 query, user_profile, user_ner 정보를 모두 활용하여 판단하세요.
-2. Action Input은 반드시 모든 정보를 포함한 JSON 형식으로 작성하세요.
+2. 도구는 한 번에 하나씩만 호출하세요
+3. 여러 정보가 필요한 경우 도구를 순차적으로 호출하세요
+4. 각 도구의 결과를 모아서 최종 답변을 생성하세요
+5. Action Input은 반드시 JSON 형식으로 작성하세요
 """
 
     # PromptTemplate으로 변환
@@ -101,7 +108,7 @@ Thought: {agent_scratchpad}
         agent=react_agent,
         tools=tools,
         handle_parsing_errors=True,
-        max_iterations=1,  # 반복 횟수 더 제한
+        max_iterations=2,  # 반복 횟수 더 제한
         max_execution_time=None,  # 시간 제한 제거
         early_stopping_method="force",  # generate -> force로 변경
         return_intermediate_steps=True,  # 중간 단계 결과 반환
@@ -417,13 +424,17 @@ async def meal_agent_tool_func(input_str: str) -> str:
                 "phone": service.get("phoneNumber", ""),
                 "operatingHours": service.get("mlsvTime", ""),
                 "targetGroup": service.get("mlsvTrget", ""),
-                "description": service.get("mlsvDate", "")
+                "description": service.get("mlsvDate", ""),
+                "latitude": float(service.get("latitude", "0.0") or "0.0"),    # 안전한 형변환
+                "longitude": float(service.get("longitude", "0.0") or "0.0")   # 안전한 형변환
             })
 
         # 사용자 친화적인 메시지 생성
         if meal_services:
             message = f"{region or '전국'}의 무료급식소 {len(meal_services)}곳을 찾았습니다"
-            
+        else:
+            message = f"{region or '전국'}에서 무료급식소를 찾을 수 없습니다"
+
         return json.dumps({
             "message": message,
             "type": "meal",

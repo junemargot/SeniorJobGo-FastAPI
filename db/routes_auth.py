@@ -3,15 +3,15 @@
 """
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from bson.objectid import ObjectId
+from bson import ObjectId
 from datetime import datetime
 import bcrypt
-import uuid
 import httpx
 import os
+import uuid
+
 from .database import db
 from .models import UserModel
-from bson import ObjectId
 
 router = APIRouter()
 
@@ -23,42 +23,25 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed_password.encode())
 
-def set_cookie(response: Response, id: str, provider: str):
+# 쿠키 설정
+def set_cookie(response: Response, _id: str, provider: str):
     max_age = 60*60*24*30
-    response.set_cookie(key="sjgid", value=id, max_age=max_age)
+    response.set_cookie(key="sjgid", value=_id, max_age=max_age)
     response.set_cookie(key="sjgpr", value=provider, max_age=max_age)
-
 
 # 쿠키 가져오기
 def get_cookie(request: Request):
     _id = request.cookies.get("sjgid")
     provider = request.cookies.get("sjgpr")
-    return _id, provider
 
-# 쿠키 확인 후 사용자 정보 반환
-@router.get("/user/cookie")
-async def get_user_info_by_cookie(request: Request) -> UserModel:
-    _id, provider = get_cookie(request)
-    user = await db.users.find_one({"_id": ObjectId(_id), "provider": provider})
-    if user:
-        return user
-    else:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-@router.get("/check")
-async def check_cookie(request: Request) -> bool:
-    _id = request.cookies.get("sjgid")
-    provider = request.cookies.get("sjgpr")
     return _id, provider
 
 # 쿠키 확인
 @router.get("/check")
 async def check_cookie(request: Request) -> bool:
     try:
-        _id = request.cookies.get("sjgid")
-        provider = request.cookies.get("sjgpr")
+        _id, provider = get_cookie(request)
         user = await db.users.find_one({"_id": ObjectId(_id), "provider": provider})
-        print("user is not None:", user is not None)
         return user is not None
     except:
         return False
@@ -78,24 +61,26 @@ async def get_user_info_by_cookie(request: Request) -> UserModel:
 async def signup_user(request: Request, response: Response):
     try:
         data = await request.json()
-        
-        # userId를 id로 변환
-        user_id = data.get("userId")  # "userId"로 변경
+
+        user_id = data.get("userId")
         user = await db.users.find_one({"id": user_id})
 
         if user:
             raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
-        
-        # 비회원에서 회원가입 시 비회원의 데이터를 회원으로 변환
-        if request.cookies.get("sjgpr") == "none":
-            _id = request.cookies.get("sjgid")
-            user = await db.users.find_one({"_id": _id})
-            user["provider"] = "local"
+
+        try:
+            # 비회원에서 회원가입 시 비회원의 데이터를 회원으로 변환
+            user = await get_user_info_by_cookie(request)
+
             user["id"] = user_id
             user["password"] = hash_password(data.get("password"))
-            await db.users.update_one({"_id": _id}, {"$set": user})
-            set_cookie(response, _id, "local")
-            return {**user, "_id": _id}
+            user["provider"] = "local"
+
+            await db.users.update_one({"_id": user["_id"]}, {"$set": user})
+            set_cookie(response, user["_id"], "local")
+            return
+        except:
+            pass
 
         # UserModel 생성 시 id 필드명 사용
         user = UserModel(
@@ -107,9 +92,8 @@ async def signup_user(request: Request, response: Response):
         user_dict = user.model_dump()
         result = await db.users.insert_one(user_dict)
         set_cookie(response, str(result.inserted_id), "local")
-        return {**user_dict, "_id": str(result.inserted_id)}
-    except Exception as e:
-        print(e)
+        return
+    except:
         raise HTTPException(status_code=500, detail="회원가입에 실패했습니다.")
 
 # 사용자 로그인 (Login)
@@ -121,10 +105,14 @@ async def login_user(request: Request, response: Response) -> bool:
     provider = data.get("provider")
 
     # 비회원에서 로그인 시 비회원의 데이터를 삭제
-    if request.cookies.get("sjgpr") == "none":
-        _id = request.cookies.get("sjgid")
-        await db.users.delete_one({"_id": _id})
+    try:
+        _id, provider = get_cookie(request)
+        if provider == "none":
+            await db.users.delete_one({"_id": ObjectId(_id)})
+    except:
+        pass
 
+    # 로컬 로그인
     if provider == "local":
         user = await db.users.find_one({"id": user_id, "provider": "local"})
         if user:
@@ -152,7 +140,7 @@ async def guest_login(response: Response):
     user_dict = user.model_dump()
     result = await db.users.insert_one(user_dict)
     set_cookie(response, str(result.inserted_id), "none")
-    return {**user_dict, "_id": str(result.inserted_id)}
+    return
 
 # 비회원 전부 삭제
 @router.delete("/delete/guest")
@@ -214,6 +202,7 @@ async def kakao_callback(code: str, request: Request, response: Response):
             if sjgpr == "none" and sjgid:
                 await db.users.delete_one({"_id": ObjectId(sjgid)})
         else:
+            # 비회원인 경우 비회원을 카카오 로그인 회원으로 변환
             if sjgpr == "none" and sjgid:
                 kakao_user_info = await db.users.find_one({"_id": ObjectId(sjgid)})
                 kakao_user_info["id"] = user_id
@@ -228,6 +217,7 @@ async def kakao_callback(code: str, request: Request, response: Response):
 
                 user = await db.users.update_one({"_id": ObjectId(sjgid)}, {"$set": kakao_user_info})
                 _id = sjgid
+            # 카카오 로그인 시 회원가입이 되어있지 않은 사용자라면 회원가입 처리
             else:
                 # 주석 처리된 부분은 UserModel에 없는 필드이므로 추후 추가한다면 해당되는 부분을 주석 해제하여 사용할 수 있음
                 user_info = UserModel(
@@ -238,7 +228,7 @@ async def kakao_callback(code: str, request: Request, response: Response):
                     # email=user_info["kakao_account"]["email"] if user_info["kakao_account"]["email_needs_agreement"] else None,
                     # phone=user_info["kakao_account"]["phone_number"],
                     gender=user_info["kakao_account"]["gender"],
-                    # age=user_info["kakao_account"]["age_range"],
+                    # age_range=user_info["kakao_account"]["age_range"],
                     birth_year=int(user_info["kakao_account"]["birthyear"])
                 )
 

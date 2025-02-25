@@ -1,14 +1,12 @@
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 class ChatRequest(BaseModel):
-    """채팅 요청 스키마"""
     user_message: str
     user_profile: Optional[dict] = None
     session_id: Optional[str] = None
 
 class JobPosting(BaseModel):
-    """채용 공고 스키마"""
     id: int
     title: str
     company: str
@@ -26,7 +24,6 @@ class JobPosting(BaseModel):
     posting_url: str
 
 class TrainingCourse(BaseModel):
-    """훈련과정 스키마"""
     id: str
     title: str
     institute: str
@@ -41,13 +38,14 @@ class TrainingCourse(BaseModel):
     titleLink: Optional[str] = None
     telNo: Optional[str] = None
 
-
 class PolicyPosting(BaseModel):
     source: str
     title: str
     target: str
     content: str
     applyMethod: str
+    applicationPeriod: str
+    supplytype: str
     contact: str
     url: str
 
@@ -57,11 +55,11 @@ class MealPosting(BaseModel):
     phone: str
     operatingHours: str
     targetGroup: str
-    description: str 
-
+    description: str
+    latitude: float = 0.0  # 위도 필드 추가
+    longitude: float = 0.0  # 경도 필드 추가
 
 class ChatResponse(BaseModel):
-    """채팅 응답 스키마"""
     type: str  # 'list' 또는 'detail'
     message: str
     jobPostings: List[JobPosting]
@@ -70,5 +68,4 @@ class ChatResponse(BaseModel):
     mealPostings: List[MealPosting] = []  # 식사 정보 추가
     user_profile: Optional[dict] = None
     processingTime: float = 0  # 처리 시간 추가
-
 

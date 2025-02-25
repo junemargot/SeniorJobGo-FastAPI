@@ -1,4 +1,3 @@
-# 패키지 임포트
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,14 +12,13 @@ import sys
 import json
 import logging
 from contextlib import asynccontextmanager
-
+from app.core.prompts import EXTRACT_INFO_PROMPT
 from db import database_initialize, database_shutdown
 from app.routes import userInform_router
 from app.routes import training_router
 from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.chat_agent import ChatAgent
 from app.services.meal_data_client import PublicDataClient
-
 
 # 로깅 설정을 더 자세하게
 logging.basicConfig(
@@ -49,18 +47,17 @@ async def lifespan(app: FastAPI):
         
         # LLM과 에이전트 초기화
         logger.info("LLM과 에이전트를 초기화합니다.")
-        llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
+        app.state.llm = ChatOpenAI(
+            model_name=settings.OPENAI_MODEL_NAME,
             temperature=0.5,
             request_timeout=30
         )
-        app.state.llm = llm  # 앱 상태에 저장
         
         # 에이전트 초기화
-        app.state.supervisor = SupervisorAgent(llm)
-        app.state.job_advisor = JobAdvisorAgent(llm, vector_search)
-        app.state.training_advisor = TrainingAdvisorAgent(llm)
-        app.state.chat_agent = ChatAgent(llm)  # ChatAgent 추가
+        app.state.supervisor = SupervisorAgent(app.state.llm)
+        app.state.job_advisor = JobAdvisorAgent(app.state.llm, vector_search)
+        app.state.training_advisor = TrainingAdvisorAgent(app.state.llm)
+        app.state.chat_agent = ChatAgent(app.state.llm)  # ChatAgent 추가
 
         logger.info("LLM과 에이전트 초기화 완료")
 
@@ -88,14 +85,18 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱 생성 시 lifespan 설정
 app = FastAPI(lifespan=lifespan)
 
-# CORS 설정
+# CORS 미들웨어를 다른 미들웨어보다 먼저 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
+    expose_headers=["*"],
+    max_age=600,  # 프리플라이트 요청 캐시 시간 (초)
 )
+
+# 나머지 라우터 등록
 app.include_router(userInform_router.router)
 app.include_router(training_router.router)
 

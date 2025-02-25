@@ -1,5 +1,8 @@
 import requests
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PublicDataClient:
   def __init__(self):
@@ -52,15 +55,17 @@ class PublicDataClient:
         # 4. 현재 페이지 데이터 정규화 및 추가
         for item in items:
           normalized = {
-            "fcltyNm":  item.get("fcltyNm", ""),                      # 시설명
-            "rdnmadr":  item.get("rdnmadr", ""),                      # 도로명주소
-            "lnmadr":   item.get("lnmadr", ""),                       # 지번주소
-            "operInstitutionNm": item.get("operInstitutionNm", ""),   # 운영기관명
-            "phoneNumber":       item.get("phoneNumber", ""),         # 전화번호
-            "mlsvPlace":         item.get("mlsvPlace", ""),           # 급식장소   
-            "mlsvTrget":         item.get("mlsvTrget", ""),           # 급식대상 
-            "mlsvTime":          item.get("mlsvTime", ""),            # 급식시간
-            "mlsvDate":          item.get("mlsvDate", "")             # 급식일자
+            "fcltyNm":  item.get("fcltyNm", "").strip(),                    # 시설명
+            "rdnmadr":  item.get("rdnmadr", "").strip(),                    # 도로명주소
+            "lnmadr":   item.get("lnmadr", "").strip(),                     # 지번주소
+            "operInstitutionNm": item.get("operInstitutionNm", "").strip(), # 운영기관명
+            "phoneNumber":       item.get("phoneNumber", "").strip(),        # 전화번호
+            "mlsvPlace":         item.get("mlsvPlace", "").strip(),         # 급식장소   
+            "mlsvTrget":         item.get("mlsvTrget", "").strip(),         # 급식대상 
+            "mlsvTime":          item.get("mlsvTime", "").strip(),          # 급식시간
+            "mlsvDate":          item.get("mlsvDate", "").strip(),          # 급식일자
+            "latitude":          float(item.get("latitude", "0.0") or "0.0"),    # 위도
+            "longitude":         float(item.get("longitude", "0.0") or "0.0")    # 경도
           }
           all_records.append(normalized)
       
