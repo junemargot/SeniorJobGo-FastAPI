@@ -44,6 +44,8 @@ class PolicyPosting(BaseModel):
     target: str
     content: str
     applyMethod: str
+    applicationPeriod: str
+    supplytype: str
     contact: str
     url: str
 

@@ -54,9 +54,11 @@ class Gov24Client:
                         normalized = {
                             "source": "Gov24",
                             "title": title,
-                            "target": "노인 대상",
+                            "target": "고령층 대상",
                             "content": f"{title}: {desc}",
                             "applyMethod": policy.get('신청방법', '정보 없음'),
+                            "applicationPeriod": policy.get('신청기한', '정보 없음'),
+                            "supplytype": policy.get('지원유형', '정보 없음'),
                             "contact": policy.get('전화문의', '정보 없음'),
                             "url": policy.get('상세조회URL', '정보 없음')
                         }
