@@ -145,17 +145,46 @@ class SupervisorAgent:
             }
 
     def is_satisfied(self, tool_response: dict) -> bool:
-        """
-        Tool(또는 Agent) 결과가 충분히 만족스러운지 여부를 ReAct로 물어볼 수 있다고 가정.
-        예시로만 작성.
-        """
+        """Tool 결과의 만족도를 평가"""
         try:
-            check_str = f"이 응답이 충분한지 판단해줘: {tool_response}"
+            # 1. 기본 구조 검증
+            if not isinstance(tool_response, dict):
+                return False
+            
+            # 2. 필수 필드 검증
+            required_fields = {"message", "type"}
+            if not all(field in tool_response for field in required_fields):
+                return False
+            
+            # 3. 응답 타입별 검증
+            response_type = tool_response.get("type")
+            if response_type == "error":
+                return False
+            
+            # 4. 컨텐츠 존재 여부 검증
+            if response_type == "job" and not tool_response.get("jobPostings"):
+                return False
+            if response_type == "training" and not tool_response.get("trainingCourses"):
+                return False
+            if response_type == "policy" and not tool_response.get("policyPostings"):
+                return False
+            if response_type == "meal" and not tool_response.get("mealPostings"):
+                return False
+            
+            # 5. LLM 기반 품질 평가
+            check_str = f"""
+            다음 응답이 충분한지 평가해주세요:
+            응답 타입: {response_type}
+            메시지: {tool_response.get('message')}
+            데이터 수: {len(tool_response.get(f'{response_type}Postings', []))}
+            """
             result = self.agent.invoke(json.dumps(check_str, ensure_ascii=False))
+            
             return "yes" in result.lower()
+        
         except Exception as e:
             logger.error(f"[SupervisorAgent] is_satisfied 에러: {str(e)}", exc_info=True)
-            return True  # 실패 시 일단 True로
+            return False  # 에러 시 False 반환하여 다른 도구 시도
         
    ###############################################################################
 # 예시 Job / Training / Chat 처리용 함수 (각 Tool이 실제로 호출)

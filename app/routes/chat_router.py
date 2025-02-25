@@ -61,9 +61,9 @@ async def format_chat_history(user_id: str, limit: int = 3) -> str:
             role = msg.get("role", "")
             content = msg.get("content", "")
             if role == "user":
-                history.append(f"User: {content}")
+                history.append(f"user: {content}")
             elif role == "bot":
-                history.append(f"Assistant: {content}")
+                history.append(f"bot: {content}")
                 
         return "\n".join(history)
         
