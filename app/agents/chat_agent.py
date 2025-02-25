@@ -1,10 +1,11 @@
 from app.core.prompts import chat_persona_prompt
+from app.core.config import settings
 import logging
 import os
 from langchain_community.tools import DuckDuckGoSearchResults
 from typing import List, Dict
 from datetime import datetime
-from langchain_deepseek import ChatDeepSeek
+from openai import AsyncOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.document_filter import DocumentFilter
 
@@ -16,18 +17,17 @@ class ChatAgent:
         self.persona = chat_persona_prompt
         self.document_filter = DocumentFilter()  # DocumentFilter 인스턴스 추가
         
-        # DeepSeek LLM 초기화
-        self.llm = ChatDeepSeek(
-            model_name="deepseek-chat",
-            temperature=0.3,
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
-            api_base="https://api.deepseek.com/v1"
+        # Grok API 클라이언트 초기화
+        self.client = AsyncOpenAI(
+            api_key=settings.GROK_API_KEY,
+            base_url="https://api.x.ai/v1"
         )
         
         # DuckDuckGo 검색 초기화
         self.search = DuckDuckGoSearchResults(
             output_format="list"
         )
+
 
     def _search_web(self, query: str, chat_history: str = "") -> List[Dict[str, str]]:
         """웹 검색을 수행하고 결과를 반환합니다."""
@@ -93,39 +93,48 @@ class ChatAgent:
             search_results = self._search_web(query, chat_history)
             additional_context = self._format_search_results(search_results)
             
-            # System prompt
-            system_content = self.persona
-
-            if chat_history:
-                system_content += f"\n\n이전 대화:\n{chat_history}"
+            # 기본 시스템 메시지 구성
+            system_content = self.persona + "\n\n"
+            system_content += "Search Guidelines:\n"
+            system_content += "1. Summarize key points from search results concisely\n"
+            system_content += "2. Include only essential information\n"
+            system_content += "3. Acknowledge if information is insufficient\n"
+            system_content += "4. Use markdown links for sources\n"
+            system_content += "5. Stick to verified facts\n"
+            system_content += "6. End with: '혹시 채용 정보나 직업 훈련에 대해 더 자세히 알아보고 싶으신가요?'\n"
             
-            if additional_context:
-                system_content += "\n\nSearch Guidelines:\n"
-                system_content += "1. Summarize key points from search results concisely\n"
-                system_content += "2. Include only essential information\n"
-                system_content += "3. Acknowledge if information is insufficient\n"
-                system_content += "4. Use markdown links for sources\n"
-                system_content += "5. Stick to verified facts\n"
-                system_content += "6. End with: '혹시 채용 정보나 직업 훈련에 대해 더 자세히 알아보고 싶으신가요?'\n"
-                system_content += additional_context
-            else:
-                system_content += "\n\nNote: No search results found. Inform user and suggest job/training search."
-
-            # LangChain messages
+            # 메시지 구성
             messages = [
                 SystemMessage(content=system_content),
                 HumanMessage(content=query)
             ]
 
+            if chat_history:
+                messages.insert(1, SystemMessage(content=f"이전 대화:\n{chat_history}"))
+            
+            if additional_context:
+                system_content += "\n\nSearch Results:\n" + additional_context
+                messages[0] = SystemMessage(content=system_content)
+            else:
+                system_content += "\n\nNote: No search results found. Inform user and suggest job/training search."
+                messages[0] = SystemMessage(content=system_content)
+
             try:
-                response = await self.llm.ainvoke(messages)
-                result = response.content
+                response = await self.client.chat.completions.create(
+                    model="grok-2", 
+                    messages=[
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": query}
+                    ],
+                    temperature=0.3
+                )
+                result = response.choices[0].message.content
                 
                 logger.info(f"[ChatAgent] 응답 생성 완료: {result[:100]}...")
                 return result
                 
             except Exception as e:
-                logger.error(f"[ChatAgent] LLM 호출 중 오류: {str(e)}")
+                logger.error(f"[ChatAgent] API 호출 중 오류: {str(e)}")
                 return "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다. 대신 채용 정보나 직업 훈련 정보를 찾아보시겠어요?"
 
         except Exception as e:
